@@ -1,4 +1,4 @@
-class EnhancedMusicPlayer extends HTMLElement {
+class cinematicplayer extends HTMLElement {
     constructor() {
         super();
         this._shadow = this.attachShadow({ mode: 'open' });
@@ -2603,4 +2603,4 @@ class EnhancedMusicPlayer extends HTMLElement {
 }
 
 // Register the custom element
-window.customElements.define('enhanced-music-player', EnhancedMusicPlayer);
+window.customElements.define('cinematic-player', EnhancedMusicPlayer);
