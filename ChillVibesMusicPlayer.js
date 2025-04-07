@@ -1276,43 +1276,6 @@ class ChillVibesMusicPlayer extends HTMLElement {
                                     <svg viewBox="0 0 24 24">
                                         <path d="M22.46 6c-.77.35-1.6.58-2.46.69.88-.53 1.56-1.37 1.88-2.38-.83.5-1.75.85-2.72 1.05C18.37 4.5 17.26 4 16 4c-2.35 0-4.27 1.92-4.27 4.29 0 .34.04.67.11.98C8.28 9.09 5.11 7.38 3 4.79c-.37.63-.58 1.37-.58 2.15 0 1.49.75 2.81 1.91 3.56-.71 0-1.37-.2-1.95-.5v.03c0 2.08 1.48 3.82 3.44 4.21a4.22 4.22 0 0 1-1.93.07 4.28 4.28 0 0 0 4 2.98 8.521 8.521 0 0 1-5.33 1.84c-.34 0-.68-.02-1.02-.06C3.44 20.29 5.7 21 8.12 21 16 21 20.33 14.46 20.33 8.79c0-.19 0-.37-.01-.56.84-.6 1.56-1.36 2.14-2.23z"/>
                                     </svg>
-                                </button>
-                                <button class="share-button share-whatsapp" title="Share on WhatsApp">
-                                    <svg viewBox="0 0 24 24">
-                                        <path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.101-.473-.15-.673.15-.197.295-.771.964-.944 1.162-.175.195-.349.21-.646.075-.3-.15-1.263-.465-2.403-1.485-.888-.795-1.484-1.77-1.66-2.07-.174-.3-.019-.465.13-.615.136-.135.301-.345.451-.523.146-.181.194-.301.297-.496.1-.21.049-.375-.025-.524-.075-.15-.672-1.62-.922-2.206-.24-.584-.487-.51-.672-.51-.172-.015-.371-.015-.571-.015-.2 0-.523.074-.797.359-.273.3-1.045 1.02-1.045 2.475s1.07 2.865 1.219 3.075c.149.195 2.105 3.195 5.1 4.485.714.3 1.27.48 1.704.629.714.227 1.365.195 1.88.121.574-.091 1.767-.721 2.016-1.426.255-.705.255-1.29.18-1.425-.074-.135-.27-.21-.57-.345m-5.446 7.443h-.016c-1.77 0-3.524-.48-5.055-1.38l-.36-.214-3.75.975 1.005-3.645-.239-.375a9.869 9.869 0 0 1-1.516-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.891-9.885 9.891m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/>
-                                    </svg>
-                                </button>
-                                <button class="share-button share-email" title="Share via Email">
-                                    <svg viewBox="0 0 24 24">
-                                        <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                                    </svg>
-                                </button>
-                                <button class="share-button share-copy" title="Copy Link">
-                                    <svg viewBox="0 0 24 24">
-                                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Artist social links -->
-                        <div class="artist-social-container">
-                            <div class="artist-social-title">
-                                <svg viewBox="0 0 24 24" width="16" height="16">
-                                    <path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                                </svg>
-                                Follow Artist
-                            </div>
-                            <div class="artist-social-links">
-                                <a href="#" class="artist-social-link artist-facebook" target="_blank" title="Facebook">
-                                    <svg viewBox="0 0 24 24">
-                                        <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z"/>
-                                    </svg>
-                                </a>
-                                <a href="#" class="artist-social-link artist-twitter" target="_blank" title="Twitter">
-                                    <svg viewBox="0 0 24 24">
-                                        <path d="M22.46 6c-.77.35-1.6.58-2.46.69.88-.53 1.56-1.37 1.88-2.38-.83.5-1.75.85-2.72 1.05C18.37 4.5 17.26 4 16 4c-2.35 0-4.27 1.92-4.27 4.29 0 .34.04.67.11.98C8.28 9.09 5.11 7.38 3 4.79c-.37.63-.58 1.37-.58 2.15 0 1.49.75 2.81 1.91 3.56-.71 0-1.37-.2-1.95-.5v.03c0 2.08 1.48 3.82 3.44 4.21a4.22 4.22 0 0 1-1.93.07 4.28 4.28 0 0 0 4 2.98 8.521 8.521 0 0 1-5.33 1.84c-.34 0-.68-.02-1.02-.06C3.44 20.29 5.7 21 8.12 21 16 21 20.33 14.46 20.33 8.79c0-.19 0-.37-.01-.56.84-.6 1.56-1.36 2.14-2.23z"/>
-                                    </svg>
                                 </a>
                                 <a href="#" class="artist-social-link artist-instagram" target="_blank" title="Instagram">
                                     <svg viewBox="0 0 24 24">
@@ -1523,181 +1486,300 @@ class ChillVibesMusicPlayer extends HTMLElement {
         }
     }
     
-    // Find these visualization methods in the code and replace them with this block
-
-_startVisualization() {
-    if (!this._analyser || !this._canvasCtx) return;
-    
-    // Set up canvas properties for smoother visualization
-    this._canvasCtx.lineCap = 'round';
-    this._canvasCtx.lineJoin = 'round';
-    
-    // Make the visualizer taller
-    const visualizerContainer = this._shadow.querySelector('.visualizer-container');
-    if (visualizerContainer) {
-        visualizerContainer.style.height = '140px';
-        visualizerContainer.style.padding = '0';
+    _startVisualization() {
+        if (!this._analyser || !this._canvasCtx) return;
+        
+        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
     }
     
-    this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
-}
-
-_stopVisualization() {
-    if (this._animationId) {
-        cancelAnimationFrame(this._animationId);
-        this._animationId = null;
-    }
-    
-    // Clear canvas
-    if (this._canvasCtx && this._canvas) {
-        this._canvasCtx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-    }
-}
-
-_drawVisualization() {
-    if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
-    
-    this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
-    
-    // Get frequency data
-    this._analyser.getByteFrequencyData(this._dataArray);
-    
-    const canvas = this._canvas;
-    const ctx = this._canvasCtx;
-    
-    // Create gentle fade effect
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Get colors from CSS variables
-    const visualizerStartColor = getComputedStyle(this).getPropertyValue('--visualizer-color-start') || '#4ecdc4';
-    const visualizerEndColor = getComputedStyle(this).getPropertyValue('--visualizer-color-end') || '#7ae7e0';
-    
-    // Time-based animation for wave movement
-    const time = Date.now() * 0.001;
-    
-    // Draw multiple ocean wave layers
-    this._drawOceanWave(ctx, canvas, time, this._dataArray, visualizerStartColor, 0.7, 1);
-    this._drawOceanWave(ctx, canvas, time + 10, this._dataArray, visualizerEndColor, 0.5, 0.8);
-    this._drawOceanWave(ctx, canvas, time + 20, this._dataArray, visualizerStartColor, 0.3, 0.6);
-    
-    // Draw floating particles - like sun reflections on water
-    this._drawFloatingParticles(ctx, canvas, time);
-}
-
-_drawOceanWave(ctx, canvas, time, dataArray, color, opacity, heightScale) {
-    ctx.save();
-    
-    // Set transparency
-    ctx.globalAlpha = opacity;
-    
-    // Start the wave path
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height);
-    
-    // Number of points to create smooth wave
-    const points = 12;
-    const width = canvas.width;
-    
-    // Draw wave from left to right
-    for (let i = 0; i <= points; i++) {
-        const x = (i / points) * width;
+    _stopVisualization() {
+        if (this._animationId) {
+            cancelAnimationFrame(this._animationId);
+            this._animationId = null;
+        }
         
-        // Calculate wave height based on audio data and time
-        const dataIndex = Math.floor((i / points) * dataArray.length * 0.5);
-        const amplitude = dataArray[dataIndex] / 255 * canvas.height * 0.5 * heightScale;
-        
-        // Create smooth sine wave with audio reactivity
-        const freqFactor = 2 + (dataArray[Math.floor(dataArray.length / 2)] / 255);
-        const yBase = canvas.height * 0.7;
-        const sineWave = Math.sin(time * 1.5 + i * 0.5) * 15;
-        const waveFactor = sineWave * (1 + dataArray[dataIndex] / 255);
-        
-        const y = yBase - amplitude - waveFactor;
-        
-        // Use bezier curves for smoother waves
-        if (i === 0) {
-            ctx.lineTo(x, y);
-        } else {
-            const prevX = ((i - 1) / points) * width;
-            const cpX1 = prevX + (x - prevX) * 0.5;
-            ctx.bezierCurveTo(
-                cpX1, ctx.currentPoint.y,
-                cpX1, y,
-                x, y
-            );
+        // Clear canvas
+        if (this._canvasCtx && this._canvas) {
+            this._canvasCtx.clearRect(0, 0, this._canvas.width, this._canvas.height);
         }
     }
     
-    // Complete the wave shape
-    ctx.lineTo(canvas.width, canvas.height);
-    ctx.closePath();
-    
-    // Create gradient fill
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, color);
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.2)');
-    
-    ctx.fillStyle = gradient;
-    ctx.fill();
-    
-    ctx.restore();
-}
-
-_drawFloatingParticles(ctx, canvas, time) {
-    // Create particles if not already created
-    if (!this._particles) {
-        this._particles = Array(30).fill().map(() => ({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height * 0.8 + canvas.height * 0.2, // Keep in bottom 80%
-            size: Math.random() * 3 + 1,
-            speed: Math.random() * 0.3 + 0.1,
-            opacityFactor: Math.random() * 0.7 + 0.3,
-            sineOffset: Math.random() * Math.PI * 2
-        }));
+    _drawVisualization() {
+        if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
+        
+        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+        
+        // Get frequency data
+        this._analyser.getByteFrequencyData(this._dataArray);
+        
+        const canvas = this._canvas;
+        const ctx = this._canvasCtx;
+        
+        // Create a persistent time variable if it doesn't exist
+        if (!this._visualizerTime) this._visualizerTime = 0;
+        this._visualizerTime += 0.01; // Increment for smooth animations
+        
+        // Clear canvas with a gentle gradient background
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        bgGradient.addColorStop(0, 'rgba(255, 255, 255, 0.05)');
+        bgGradient.addColorStop(1, 'rgba(255, 255, 255, 0.01)');
+        ctx.fillStyle = bgGradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Get theme colors for visualization
+        const visualizerStartColor = getComputedStyle(this).getPropertyValue('--visualizer-color-start') || '#4ecdc4';
+        const visualizerEndColor = getComputedStyle(this).getPropertyValue('--visualizer-color-end') || '#7ae7e0';
+        
+        // Initialize circular rings if not created
+        if (!this._rings) {
+            this._rings = Array(4).fill().map((_, i) => ({
+                radius: canvas.height * (0.2 + i * 0.15),
+                intensity: 0,
+                offset: i * Math.PI / 7,
+                segments: 150
+            }));
+        }
+        
+        // Initialize ocean waves if not created
+        if (!this._waves) {
+            this._waves = Array(3).fill().map((_, i) => ({
+                height: 0.3 + (i * 0.2),
+                speed: 0.05 - (i * 0.01),
+                offset: i * 5,
+                frequency: 7 - (i * 1.5),
+                phase: 0
+            }));
+        }
+        
+        // Initialize bubble particles
+        if (!this._bubbles) {
+            this._bubbles = Array(30).fill().map(() => ({
+                x: Math.random() * canvas.width,
+                y: canvas.height + Math.random() * 50,
+                size: Math.random() * 6 + 2,
+                speed: Math.random() * 0.7 + 0.3,
+                opacity: Math.random() * 0.6 + 0.2,
+                hue: Math.random() * 40 - 20 // hue variation to add to main color
+            }));
+        }
+        
+        // Calculate average audio levels for different frequency bands
+        const bassBand = this._getFrequencyBandValue(0, 5);     // Low frequencies (bass)
+        const midBand = this._getFrequencyBandValue(5, 20);     // Mid frequencies
+        const trebleBand = this._getFrequencyBandValue(20, 50); // High frequencies
+        
+        // Update rings based on audio frequencies with smooth transitions
+        this._rings.forEach((ring, i) => {
+            // Different frequency bands affect different rings
+            let targetIntensity;
+            if (i === 0) targetIntensity = bassBand * 1.2;
+            else if (i === 1) targetIntensity = midBand * 1.0;
+            else if (i === 2) targetIntensity = trebleBand * 0.8;
+            else targetIntensity = (bassBand + midBand + trebleBand) / 3 * 0.6;
+            
+            // Smooth transitions for intensity changes
+            ring.intensity = ring.intensity * 0.95 + targetIntensity * 0.05;
+            
+            // Draw circular audio reactive pattern
+            this._drawAudioReactiveRing(ctx, canvas.width / 2, canvas.height / 2, ring, visualizerStartColor, visualizerEndColor);
+        });
+        
+        // Draw smooth ocean waves at the bottom
+        ctx.save();
+        this._waves.forEach((wave, i) => {
+            // Update wave phase
+            wave.phase += wave.speed * (0.5 + (bassBand + midBand) * 0.3); // Audio reactivity
+            
+            // Create wave gradient
+            const waveGradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height * (1 - wave.height));
+            waveGradient.addColorStop(0, `rgba(${this._hexToRgb(visualizerStartColor)}, ${0.3 - i * 0.07})`);
+            waveGradient.addColorStop(1, `rgba(${this._hexToRgb(visualizerEndColor)}, ${0.1 - i * 0.03})`);
+            
+            // Draw wave
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            
+            for (let x = 0; x < canvas.width; x += 5) {
+                // Create smooth wave pattern with multiple sine waves
+                const waveHeight = Math.sin(x * 0.01 * wave.frequency + wave.phase + wave.offset) 
+                                  * (10 + bassBand * 15) // Bass makes waves higher
+                                  + Math.sin(x * 0.02 * (wave.frequency * 0.7) + wave.phase * 1.3) 
+                                  * (5 + midBand * 10);  // Mids add detail
+                                  
+                const y = canvas.height - (canvas.height * wave.height) + waveHeight;
+                ctx.lineTo(x, y);
+            }
+            
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.closePath();
+            ctx.fillStyle = waveGradient;
+            ctx.fill();
+        });
+        ctx.restore();
+        
+        // Draw and update bubble particles
+        ctx.save();
+        this._bubbles.forEach(bubble => {
+            // Create a shimmering effect based on time and position
+            const shimmer = Math.sin(this._visualizerTime * 2 + bubble.x * 0.01 + bubble.y * 0.01) * 0.2 + 0.8;
+            
+            // Make bubbles responsive to music
+            const pulseSize = bubble.size * (1 + ((bassBand + midBand) * 0.05 * Math.random()));
+            
+            // Create radial gradient for bubbles
+            const bubbleGradient = ctx.createRadialGradient(
+                bubble.x, bubble.y, 0,
+                bubble.x, bubble.y, pulseSize * 2
+            );
+            
+            // Adjust bubble color based on theme with slight variations
+            const baseColor = this._adjustColor(visualizerStartColor, bubble.hue);
+            bubbleGradient.addColorStop(0, `rgba(${this._hexToRgb(baseColor)}, ${bubble.opacity * shimmer})`);
+            bubbleGradient.addColorStop(0.6, `rgba(${this._hexToRgb(visualizerEndColor)}, ${bubble.opacity * 0.7 * shimmer})`);
+            bubbleGradient.addColorStop(1, `rgba(255, 255, 255, 0)`);
+            
+            // Draw bubble
+            ctx.beginPath();
+            ctx.arc(bubble.x, bubble.y, pulseSize, 0, Math.PI * 2);
+            ctx.fillStyle = bubbleGradient;
+            ctx.fill();
+            
+            // Add subtle glow
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = baseColor;
+            
+            // Move bubbles upward with slight horizontal drift based on time
+            const drift = Math.sin(this._visualizerTime + bubble.y * 0.01) * 0.5;
+            bubble.x += drift;
+            bubble.y -= bubble.speed * (1 + (midBand * 0.2)); // Music affects speed
+            
+            // Reset bubbles when they go off screen
+            if (bubble.y < -bubble.size * 2) {
+                bubble.y = canvas.height + bubble.size;
+                bubble.x = Math.random() * canvas.width;
+                bubble.size = Math.random() * 6 + 2;
+                bubble.opacity = Math.random() * 0.6 + 0.2;
+                bubble.hue = Math.random() * 40 - 20;
+            }
+        });
+        ctx.restore();
+        
+        // Draw subtle central pulse effect
+        const pulseSize = 30 + (bassBand * 50);
+        const pulseOpacity = 0.05 + (bassBand * 0.1);
+        
+        ctx.beginPath();
+        const pulseGradient = ctx.createRadialGradient(
+            canvas.width / 2, canvas.height / 2, 0,
+            canvas.width / 2, canvas.height / 2, pulseSize
+        );
+        pulseGradient.addColorStop(0, `rgba(${this._hexToRgb(visualizerEndColor)}, ${pulseOpacity})`);
+        pulseGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = pulseGradient;
+        ctx.arc(canvas.width / 2, canvas.height / 2, pulseSize, 0, Math.PI * 2);
+        ctx.fill();
     }
     
-    // Draw and update particles
-    ctx.save();
+    // Helper method to get average value for a frequency band
+    _getFrequencyBandValue(startIndex, endIndex) {
+        let sum = 0;
+        for (let i = startIndex; i < endIndex && i < this._dataArray.length; i++) {
+            sum += this._dataArray[i];
+        }
+        return sum / ((endIndex - startIndex) * 255); // Normalize to 0-1
+    }
     
-    for (const particle of this._particles) {
-        // Oscillating opacity for shimmering effect
-        const opacity = 0.2 + Math.sin(time * 2 + particle.sineOffset) * 0.2 * particle.opacityFactor;
+    // Helper to draw audio reactive circular patterns
+    _drawAudioReactiveRing(ctx, centerX, centerY, ring, startColor, endColor) {
+        const intensity = ring.intensity;
+        const segments = ring.segments;
+        const radius = ring.radius * (0.8 + intensity * 0.3); // Pulse with audio
         
-        // Draw glow
-        const glow = ctx.createRadialGradient(
-            particle.x, particle.y, 0,
-            particle.x, particle.y, particle.size * 2
-        );
+        ctx.save();
+        ctx.translate(centerX, centerY);
         
-        glow.addColorStop(0, `rgba(255, 255, 255, ${opacity * 1.5})`);
-        glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        // Create radial gradient for the ring
+        const ringGradient = ctx.createRadialGradient(0, 0, radius * 0.8, 0, 0, radius * 1.2);
+        ringGradient.addColorStop(0, `rgba(${this._hexToRgb(startColor)}, ${0.03 + intensity * 0.05})`);
+        ringGradient.addColorStop(1, `rgba(${this._hexToRgb(endColor)}, 0)`);
         
-        ctx.fillStyle = glow;
+        // Draw ring with audio-reactive shape
         ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.size * 2, 0, Math.PI * 2);
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2 + ring.offset + this._visualizerTime * 0.2;
+            
+            // Create audio-reactive distortion
+            const freqIndex = Math.floor((i / segments) * this._dataArray.length);
+            const freqValue = this._dataArray[freqIndex] / 255;
+            
+            // Create smooth waveform appearance
+            const waveform = 
+                Math.sin(angle * 5 + this._visualizerTime * 2) * 0.1 +
+                Math.sin(angle * 9 + this._visualizerTime * 1.5) * 0.05;
+            
+            // Combine base radius with audio reactivity and waveform
+            const radiusOffset = radius * (1 + (waveform + freqValue * 0.3) * intensity);
+            
+            const x = Math.cos(angle) * radiusOffset;
+            const y = Math.sin(angle) * radiusOffset;
+            
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        
+        ctx.closePath();
+        ctx.fillStyle = ringGradient;
         ctx.fill();
         
-        // Add slight horizontal sine movement
-        particle.x += Math.sin(time + particle.sineOffset) * 0.3;
+        // Add subtle glow
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = startColor;
+        ctx.stroke();
         
-        // Move particles upward slowly
-        particle.y -= particle.speed;
-        
-        // Reset particles that go off-screen
-        if (particle.y < 0) {
-            particle.y = canvas.height + 5;
-            particle.x = Math.random() * canvas.width;
-        }
-        
-        // Reset particles that drift too far horizontally
-        if (particle.x < -10 || particle.x > canvas.width + 10) {
-            particle.x = Math.random() * canvas.width;
-        }
+        ctx.restore();
     }
     
-    ctx.restore();
-}
+    // Helper to convert hex color to rgb format
+    _hexToRgb(hex) {
+        // Remove # if present
+        hex = hex.replace(/^#/, '');
+        
+        // Parse hex values
+        let r, g, b;
+        if (hex.length === 3) {
+            r = parseInt(hex[0] + hex[0], 16);
+            g = parseInt(hex[1] + hex[1], 16);
+            b = parseInt(hex[2] + hex[2], 16);
+        } else {
+            r = parseInt(hex.substring(0, 2), 16);
+            g = parseInt(hex.substring(2, 4), 16);
+            b = parseInt(hex.substring(4, 6), 16);
+        }
+        
+        return `${r}, ${g}, ${b}`;
+    }
+    
+    // Helper to adjust a color by shifting its hue
+    _adjustColor(hexColor, hueShift) {
+        // Simple approximation for slight color variations
+        hexColor = hexColor.replace(/^#/, '');
+        
+        // Parse hex values
+        let r = parseInt(hexColor.substring(0, 2), 16);
+        let g = parseInt(hexColor.substring(2, 4), 16);
+        let b = parseInt(hexColor.substring(4, 6), 16);
+        
+        // Simple hue shift approximation
+        r = Math.min(255, Math.max(0, r + hueShift));
+        g = Math.min(255, Math.max(0, g + hueShift * 0.7));
+        b = Math.min(255, Math.max(0, b + hueShift * 1.5));
+        
+        // Convert back to hex
+        return `#${Math.round(r).toString(16).padStart(2, '0')}${Math.round(g).toString(16).padStart(2, '0')}${Math.round(b).toString(16).padStart(2, '0')}`;
+    }
 
     _setupEventListeners() {
         // Play/Pause button
