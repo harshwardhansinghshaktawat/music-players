@@ -1523,150 +1523,181 @@ class ChillVibesMusicPlayer extends HTMLElement {
         }
     }
     
-    _startVisualization() {
-        if (!this._analyser || !this._canvasCtx) return;
-        
-        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+    // Find these visualization methods in the code and replace them with this block
+
+_startVisualization() {
+    if (!this._analyser || !this._canvasCtx) return;
+    
+    // Set up canvas properties for smoother visualization
+    this._canvasCtx.lineCap = 'round';
+    this._canvasCtx.lineJoin = 'round';
+    
+    // Make the visualizer taller
+    const visualizerContainer = this._shadow.querySelector('.visualizer-container');
+    if (visualizerContainer) {
+        visualizerContainer.style.height = '140px';
+        visualizerContainer.style.padding = '0';
     }
     
-    _stopVisualization() {
-        if (this._animationId) {
-            cancelAnimationFrame(this._animationId);
-            this._animationId = null;
-        }
+    this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+}
+
+_stopVisualization() {
+    if (this._animationId) {
+        cancelAnimationFrame(this._animationId);
+        this._animationId = null;
+    }
+    
+    // Clear canvas
+    if (this._canvasCtx && this._canvas) {
+        this._canvasCtx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    }
+}
+
+_drawVisualization() {
+    if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
+    
+    this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+    
+    // Get frequency data
+    this._analyser.getByteFrequencyData(this._dataArray);
+    
+    const canvas = this._canvas;
+    const ctx = this._canvasCtx;
+    
+    // Create gentle fade effect
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Get colors from CSS variables
+    const visualizerStartColor = getComputedStyle(this).getPropertyValue('--visualizer-color-start') || '#4ecdc4';
+    const visualizerEndColor = getComputedStyle(this).getPropertyValue('--visualizer-color-end') || '#7ae7e0';
+    
+    // Time-based animation for wave movement
+    const time = Date.now() * 0.001;
+    
+    // Draw multiple ocean wave layers
+    this._drawOceanWave(ctx, canvas, time, this._dataArray, visualizerStartColor, 0.7, 1);
+    this._drawOceanWave(ctx, canvas, time + 10, this._dataArray, visualizerEndColor, 0.5, 0.8);
+    this._drawOceanWave(ctx, canvas, time + 20, this._dataArray, visualizerStartColor, 0.3, 0.6);
+    
+    // Draw floating particles - like sun reflections on water
+    this._drawFloatingParticles(ctx, canvas, time);
+}
+
+_drawOceanWave(ctx, canvas, time, dataArray, color, opacity, heightScale) {
+    ctx.save();
+    
+    // Set transparency
+    ctx.globalAlpha = opacity;
+    
+    // Start the wave path
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height);
+    
+    // Number of points to create smooth wave
+    const points = 12;
+    const width = canvas.width;
+    
+    // Draw wave from left to right
+    for (let i = 0; i <= points; i++) {
+        const x = (i / points) * width;
         
-        // Clear canvas
-        if (this._canvasCtx && this._canvas) {
-            this._canvasCtx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+        // Calculate wave height based on audio data and time
+        const dataIndex = Math.floor((i / points) * dataArray.length * 0.5);
+        const amplitude = dataArray[dataIndex] / 255 * canvas.height * 0.5 * heightScale;
+        
+        // Create smooth sine wave with audio reactivity
+        const freqFactor = 2 + (dataArray[Math.floor(dataArray.length / 2)] / 255);
+        const yBase = canvas.height * 0.7;
+        const sineWave = Math.sin(time * 1.5 + i * 0.5) * 15;
+        const waveFactor = sineWave * (1 + dataArray[dataIndex] / 255);
+        
+        const y = yBase - amplitude - waveFactor;
+        
+        // Use bezier curves for smoother waves
+        if (i === 0) {
+            ctx.lineTo(x, y);
+        } else {
+            const prevX = ((i - 1) / points) * width;
+            const cpX1 = prevX + (x - prevX) * 0.5;
+            ctx.bezierCurveTo(
+                cpX1, ctx.currentPoint.y,
+                cpX1, y,
+                x, y
+            );
         }
     }
     
-    _drawVisualization() {
-        if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
+    // Complete the wave shape
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.closePath();
+    
+    // Create gradient fill
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.2)');
+    
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+_drawFloatingParticles(ctx, canvas, time) {
+    // Create particles if not already created
+    if (!this._particles) {
+        this._particles = Array(30).fill().map(() => ({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height * 0.8 + canvas.height * 0.2, // Keep in bottom 80%
+            size: Math.random() * 3 + 1,
+            speed: Math.random() * 0.3 + 0.1,
+            opacityFactor: Math.random() * 0.7 + 0.3,
+            sineOffset: Math.random() * Math.PI * 2
+        }));
+    }
+    
+    // Draw and update particles
+    ctx.save();
+    
+    for (const particle of this._particles) {
+        // Oscillating opacity for shimmering effect
+        const opacity = 0.2 + Math.sin(time * 2 + particle.sineOffset) * 0.2 * particle.opacityFactor;
         
-        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+        // Draw glow
+        const glow = ctx.createRadialGradient(
+            particle.x, particle.y, 0,
+            particle.x, particle.y, particle.size * 2
+        );
         
-        // Get frequency data
-        this._analyser.getByteFrequencyData(this._dataArray);
+        glow.addColorStop(0, `rgba(255, 255, 255, ${opacity * 1.5})`);
+        glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
         
-        const canvas = this._canvas;
-        const ctx = this._canvasCtx;
-        
-        // Clear canvas with a more gentle fade effect for chill vibes
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // New visualization style for chill/tropical vibes: Smooth waves
-        const visualizerStartColor = getComputedStyle(this).getPropertyValue('--visualizer-color-start') || '#4ecdc4';
-        const visualizerEndColor = getComputedStyle(this).getPropertyValue('--visualizer-color-end') || '#7ae7e0';
-        
-        const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
-        gradient.addColorStop(0, visualizerStartColor);
-        gradient.addColorStop(1, visualizerEndColor);
-        
-        // Smoother wave-like visualization
+        ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.moveTo(0, canvas.height);
-        
-        // Use fewer data points for smoother lines
-        const sliceWidth = canvas.width / 32;
-        
-        // Create smoothed wave pattern
-        for (let i = 0; i < 32; i++) {
-            const index = Math.floor(i * this._dataArray.length / 32);
-            const value = this._dataArray[index] / 255;
-            
-            // Smooth out the visualization for a more relaxed feel
-            // Invert and scale to make it wave upward from the bottom
-            const y = canvas.height - (value * canvas.height * 0.7);
-            
-            if (i === 0) {
-                ctx.moveTo(0, y);
-            } else {
-                // Use quadratic curves for smooth transitions
-                const prevX = (i - 1) * sliceWidth;
-                const x = i * sliceWidth;
-                const cpX = (prevX + x) / 2;
-                
-                ctx.quadraticCurveTo(cpX, ctx.currentPoint.y, x, y);
-            }
-        }
-        
-        // Complete the path by drawing to the bottom right and left to create a solid shape
-        ctx.lineTo(canvas.width, canvas.height);
-        ctx.lineTo(0, canvas.height);
-        ctx.closePath();
-        
-        // Fill with gradient
-        ctx.fillStyle = gradient;
+        ctx.arc(particle.x, particle.y, particle.size * 2, 0, Math.PI * 2);
         ctx.fill();
         
-        // Add subtle reflection
-        ctx.globalAlpha = 0.3;
-        ctx.beginPath();
-        ctx.moveTo(0, canvas.height);
-        for (let i = 0; i < 32; i++) {
-            const index = Math.floor(i * this._dataArray.length / 32);
-            const value = this._dataArray[index] / 255;
-            const y = canvas.height - (value * canvas.height * 0.2) + (Math.sin(Date.now() * 0.002 + i * 0.2) * 5);
-            const x = i * sliceWidth;
-            
-            if (i === 0) {
-                ctx.moveTo(0, y);
-            } else {
-                // Use bezier curves for smooth transitions with slight randomness
-                const prevX = (i - 1) * sliceWidth;
-                const cpX1 = prevX + sliceWidth * 0.3;
-                const cpX2 = x - sliceWidth * 0.3;
-                
-                ctx.bezierCurveTo(
-                    cpX1, ctx.currentPoint.y, 
-                    cpX2, y, 
-                    x, y
-                );
-            }
-        }
-        ctx.lineTo(canvas.width, canvas.height);
-        ctx.lineTo(0, canvas.height);
-        ctx.closePath();
+        // Add slight horizontal sine movement
+        particle.x += Math.sin(time + particle.sineOffset) * 0.3;
         
-        // Add subtle shimmer/glow particles for a tropical vibe
-        ctx.globalAlpha = 1;
+        // Move particles upward slowly
+        particle.y -= particle.speed;
         
-        // Create particles if not already created
-        if (!this._particles) {
-            this._particles = Array(20).fill().map(() => ({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
-                radius: Math.random() * 2 + 1,
-                speed: Math.random() * 0.3 + 0.1,
-                opacity: Math.random() * 0.5 + 0.2
-            }));
+        // Reset particles that go off-screen
+        if (particle.y < 0) {
+            particle.y = canvas.height + 5;
+            particle.x = Math.random() * canvas.width;
         }
         
-        // Draw and update particles
-        for (const particle of this._particles) {
-            ctx.beginPath();
-            const glow = ctx.createRadialGradient(
-                particle.x, particle.y, 0,
-                particle.x, particle.y, particle.radius * 2
-            );
-            
-            glow.addColorStop(0, `rgba(255, 255, 255, ${particle.opacity})`);
-            glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
-            
-            ctx.fillStyle = glow;
-            ctx.arc(particle.x, particle.y, particle.radius * 2, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Move particles upward and reset when they go off-screen
-            particle.y -= particle.speed;
-            if (particle.y < -particle.radius * 2) {
-                particle.y = canvas.height + particle.radius;
-                particle.x = Math.random() * canvas.width;
-            }
+        // Reset particles that drift too far horizontally
+        if (particle.x < -10 || particle.x > canvas.width + 10) {
+            particle.x = Math.random() * canvas.width;
         }
     }
+    
+    ctx.restore();
+}
 
     _setupEventListeners() {
         // Play/Pause button
