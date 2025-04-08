@@ -1247,4 +1247,985 @@ class NeumorphicPlayer extends HTMLElement {
     }
     
     _loadWaveSurferScript() {
-        return new Promise((resolve, reject) =>
+return new Promise((resolve, reject) => {
+            if (window.WaveSurfer) {
+                resolve();
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/wavesurfer.js/6.6.4/wavesurfer.min.js';
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load WaveSurfer.js'));
+            document.head.appendChild(script);
+        });
+    }
+
+    _initializeWaveSurfer() {
+        if (!window.WaveSurfer) return;
+        
+        // Get direct reference to canvas for visualization
+        this._canvas = this._shadow.querySelector('#audioVisualizer');
+        this._canvasCtx = this._canvas.getContext('2d');
+        
+        // Set canvas dimensions
+        const visualizerContainer = this._shadow.querySelector('.visualizer-container');
+        this._canvas.width = visualizerContainer.clientWidth;
+        this._canvas.height = visualizerContainer.clientHeight;
+        
+        // Create hidden audio element for visualization and playback
+        this._audioElement = document.createElement('audio');
+        this._audioElement.crossOrigin = 'anonymous';
+        this._audioElement.setAttribute('preload', 'auto');
+        
+        // Create Audio API context and analyzer
+        this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this._analyser = this._audioContext.createAnalyser();
+        this._analyser.fftSize = 256; // For better performance, adjust as needed
+        this._dataArray = new Uint8Array(this._analyser.frequencyBinCount);
+        
+        // Connect audio element to analyzer
+        this._source = this._audioContext.createMediaElementSource(this._audioElement);
+        this._source.connect(this._analyser);
+        this._analyser.connect(this._audioContext.destination);
+        
+        // Set up audio element events
+        this._audioElement.addEventListener('loadedmetadata', () => {
+            this._updateDuration();
+        });
+        
+        this._audioElement.addEventListener('timeupdate', () => {
+            this._updateCurrentTime();
+        });
+        
+        this._audioElement.addEventListener('play', () => {
+            this._setPlayingState(true);
+            // Resume audio context if suspended (required by browsers)
+            if (this._audioContext.state === 'suspended') {
+                this._audioContext.resume();
+            }
+            // Start visualization
+            this._startVisualization();
+        });
+        
+        this._audioElement.addEventListener('pause', () => {
+            this._setPlayingState(false);
+            // Stop visualization
+            this._stopVisualization();
+        });
+        
+        this._audioElement.addEventListener('ended', () => {
+            this._setPlayingState(false);
+            this._stopVisualization();
+            
+            // Auto play next if not in repeat mode
+            if (!this._isRepeat) {
+                this._changeSong(1);
+            } else {
+                // For repeat mode, play the same song again
+                this._audioElement.currentTime = 0;
+                this._audioElement.play();
+            }
+        });
+        
+        // Load the current song if data is available
+        if (this._playerData && this._playerData.songs && this._playerData.songs.length > 0) {
+            const currentSong = this._playerData.songs[this._playerData.currentIndex];
+            if (currentSong && currentSong.audioFile) {
+                this._loadSong(currentSong.audioFile);
+            }
+        }
+    }
+    
+    _loadSong(url) {
+        if (this._audioElement) {
+            console.log("Loading song:", url);
+            this._audioElement.src = url;
+            this._audioElement.load();
+        }
+    }
+    
+    _startVisualization() {
+        if (!this._analyser || !this._canvasCtx) return;
+        
+        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+    }
+    
+    _stopVisualization() {
+        if (this._animationId) {
+            cancelAnimationFrame(this._animationId);
+            this._animationId = null;
+        }
+        
+        // Clear canvas
+        if (this._canvasCtx && this._canvas) {
+            this._canvasCtx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+        }
+    }
+    
+    _drawVisualization() {
+        if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
+        
+        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+        
+        // Get frequency data
+        this._analyser.getByteFrequencyData(this._dataArray);
+        
+        const canvas = this._canvas;
+        const ctx = this._canvasCtx;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Get visualizer colors from CSS variables
+        const primaryColor = getComputedStyle(this).getPropertyValue('--visualizer-bars').trim();
+        const secondaryColor = getComputedStyle(this).getPropertyValue('--visualizer-bars-alt').trim();
+        
+        // Create gradient for bars
+        const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+        gradient.addColorStop(0, primaryColor);
+        gradient.addColorStop(1, secondaryColor);
+        
+        // Draw neumorphic style bars (pill shaped)
+        const barWidth = Math.ceil(canvas.width / 64);
+        const gap = Math.max(2, Math.floor(barWidth * 0.3));
+        const totalBarWidth = barWidth + gap;
+        const barCount = Math.floor(canvas.width / totalBarWidth);
+        
+        // Keep track of previous values for smoothing
+        if (!this._prevBars) {
+            this._prevBars = new Array(barCount).fill(0);
+        }
+        
+        // Shadow for neumorphic effect
+        const shadowDark = getComputedStyle(this).getPropertyValue('--shadow-dark').trim();
+        const shadowLight = getComputedStyle(this).getPropertyValue('--shadow-light').trim();
+        
+        for (let i = 0; i < barCount; i++) {
+            // Get data and apply smoothing for more natural movement
+            const index = Math.floor(i * this._dataArray.length / barCount);
+            let value = this._dataArray[index];
+            
+            // Apply smoothing
+            const smoothingFactor = 0.7; // Adjust for more/less smoothing
+            value = this._prevBars[i] * smoothingFactor + value * (1 - smoothingFactor);
+            this._prevBars[i] = value;
+            
+            // Calculate bar height based on frequency data
+            const percent = value / 255;
+            const barHeight = Math.max(5, percent * canvas.height * 0.75); // Min height of 5px
+            
+            // Position the bar
+            const x = i * totalBarWidth;
+            const y = canvas.height - barHeight;
+            
+            // Draw neumorphic style bar with rounded corners
+            const cornerRadius = barWidth / 2; // Pill shaped bar
+            
+            // Draw main bar
+            ctx.beginPath();
+            ctx.moveTo(x + cornerRadius, y);
+            ctx.lineTo(x + barWidth - cornerRadius, y);
+            ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + cornerRadius);
+            ctx.lineTo(x + barWidth, y + barHeight - cornerRadius);
+            ctx.quadraticCurveTo(x + barWidth, y + barHeight, x + barWidth - cornerRadius, y + barHeight);
+            ctx.lineTo(x + cornerRadius, y + barHeight);
+            ctx.quadraticCurveTo(x, y + barHeight, x, y + barHeight - cornerRadius);
+            ctx.lineTo(x, y + cornerRadius);
+            ctx.quadraticCurveTo(x, y, x + cornerRadius, y);
+            ctx.closePath();
+            
+            // Gradient fill
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Add neumorphic effect with light and shadow
+            ctx.beginPath();
+            ctx.moveTo(x + cornerRadius, y);
+            ctx.lineTo(x + barWidth - cornerRadius, y);
+            ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + cornerRadius);
+            ctx.lineTo(x + barWidth, y + barHeight - cornerRadius);
+            ctx.strokeStyle = shadowLight;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(x + barWidth - cornerRadius, y + barHeight);
+            ctx.lineTo(x + cornerRadius, y + barHeight);
+            ctx.quadraticCurveTo(x, y + barHeight, x, y + barHeight - cornerRadius);
+            ctx.lineTo(x, y + cornerRadius);
+            ctx.strokeStyle = shadowDark;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+        
+        // Add subtle light reflection at the top
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(0, 0, canvas.width, 3);
+    }
+
+    _setupEventListeners() {
+        // Play/Pause button
+        const playButton = this._shadow.querySelector('.play-button');
+        const playIcon = this._shadow.querySelector('.play-icon');
+        const pauseIcon = this._shadow.querySelector('.pause-icon');
+        
+        if (playButton) {
+            playButton.addEventListener('click', () => {
+                this._togglePlayback();
+            });
+        }
+
+        // Next button
+        const nextButton = this._shadow.querySelector('.next-button');
+        if (nextButton) {
+            nextButton.addEventListener('click', () => {
+                this._changeSong(1);
+            });
+        }
+
+        // Previous button
+        const prevButton = this._shadow.querySelector('.prev-button');
+        if (prevButton) {
+            prevButton.addEventListener('click', () => {
+                this._changeSong(-1);
+            });
+        }
+
+        // Shuffle button
+        const shuffleButton = this._shadow.querySelector('.shuffle-button');
+        if (shuffleButton) {
+            shuffleButton.addEventListener('click', () => {
+                this._toggleShuffle();
+                shuffleButton.classList.toggle('active');
+            });
+        }
+
+        // Repeat button
+        const repeatButton = this._shadow.querySelector('.repeat-button');
+        if (repeatButton) {
+            repeatButton.addEventListener('click', () => {
+                this._toggleRepeat();
+                repeatButton.classList.toggle('active');
+            });
+        }
+
+        // Volume control
+        const volumeSlider = this._shadow.querySelector('.volume-slider');
+        if (volumeSlider) {
+            volumeSlider.addEventListener('input', (e) => {
+                const volume = parseFloat(e.target.value);
+                this._setVolume(volume);
+            });
+        }
+
+        // Mute button
+        const volumeIcon = this._shadow.querySelector('.volume-icon');
+        if (volumeIcon) {
+            volumeIcon.addEventListener('click', () => {
+                this._toggleMute();
+            });
+        }
+
+        // Progress bar
+        const progressBar = this._shadow.querySelector('.progress-bar');
+        if (progressBar) {
+            progressBar.addEventListener('click', (e) => {
+                if (!this._audioElement || !this._audioElement.duration) return;
+                
+                const rect = progressBar.getBoundingClientRect();
+                const position = (e.clientX - rect.left) / rect.width;
+                this._audioElement.currentTime = position * this._audioElement.duration;
+            });
+            
+            // Keyboard navigation for progress bar
+            progressBar.addEventListener('keydown', (e) => {
+                if (!this._audioElement || !this._audioElement.duration) return;
+                
+                const duration = this._audioElement.duration;
+                const currentTime = this._audioElement.currentTime;
+                const step = duration * 0.05; // 5% of duration for each key press
+                
+                switch (e.key) {
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        this._audioElement.currentTime = Math.min(duration, currentTime + step);
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        this._audioElement.currentTime = Math.max(0, currentTime - step);
+                        break;
+                    case 'Home':
+                        e.preventDefault();
+                        this._audioElement.currentTime = 0;
+                        break;
+                    case 'End':
+                        e.preventDefault();
+                        this._audioElement.currentTime = duration;
+                        break;
+                }
+            });
+        }
+        
+        // Favorite button (toggle)
+        const favoriteButton = this._shadow.querySelector('button[title="Add to Favorites"]');
+        if (favoriteButton) {
+            favoriteButton.addEventListener('click', () => {
+                favoriteButton.classList.toggle('active');
+                
+                // Show a notification
+                if (favoriteButton.classList.contains('active')) {
+                    this._showNotification('Added to favorites');
+                } else {
+                    this._showNotification('Removed from favorites');
+                }
+            });
+        }
+        
+        // Share button (show notification)
+        const shareButton = this._shadow.querySelector('button[title="Share"]');
+        if (shareButton) {
+            shareButton.addEventListener('click', () => {
+                this._handleShare();
+            });
+        }
+        
+        // Theme selector
+        const themeOptions = this._shadow.querySelectorAll('.theme-option');
+        themeOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                this._changeTheme(option.dataset.theme);
+                
+                // Update active class
+                themeOptions.forEach(opt => opt.classList.remove('active'));
+                option.classList.add('active');
+                
+                // Save theme preference to localStorage if available
+                try {
+                    localStorage.setItem('neumorphicPlayerTheme', option.dataset.theme);
+                } catch (e) {
+                    console.log('Unable to save theme preference to localStorage');
+                }
+            });
+            
+            // Make theme options keyboard accessible
+            option.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    option.click();
+                }
+            });
+        });
+        
+        // Load saved theme if available
+        try {
+            const savedTheme = localStorage.getItem('neumorphicPlayerTheme');
+            if (savedTheme) {
+                this._changeTheme(savedTheme);
+                
+                // Update active class
+                themeOptions.forEach(opt => {
+                    if (opt.dataset.theme === savedTheme) {
+                        opt.classList.add('active');
+                    } else {
+                        opt.classList.remove('active');
+                    }
+                });
+            }
+        } catch (e) {
+            console.log('Unable to load saved theme preference');
+        }
+        
+        // Service buttons
+        const serviceButtons = this._shadow.querySelectorAll('.service-button');
+        serviceButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const serviceName = button.classList.contains('spotify-button') ? 'Spotify' :
+                                    button.classList.contains('apple-button') ? 'Apple Music' :
+                                    button.classList.contains('youtube-button') ? 'YouTube' :
+                                    button.classList.contains('soundcloud-button') ? 'SoundCloud' : '';
+                
+                if (serviceName) {
+                    e.preventDefault();
+                    this._openServiceLink(serviceName.toLowerCase().replace(/\s+/g, ''));
+                }
+            });
+        });
+        
+        // Buy button
+        const buyButton = this._shadow.querySelector('.buy-button');
+        if (buyButton) {
+            buyButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this._buyNow();
+            });
+        }
+    }
+    
+    _togglePlayback() {
+        if (!this._audioElement) return;
+        
+        if (this._audioElement.paused) {
+            this._audioElement.play();
+        } else {
+            this._audioElement.pause();
+        }
+    }
+    
+    _changeTheme(theme) {
+        // Remove all theme classes
+        this.classList.remove(
+            'theme-soft-blue',
+            'theme-mint-green',
+            'theme-warm-beige',
+            'theme-dark-mode'
+        );
+        
+        // Add selected theme class
+        if (theme !== 'default') {
+            this.classList.add(`theme-${theme}`);
+        }
+    }
+
+    connectedCallback() {
+        if (this._playerData) {
+            this.render();
+        }
+        
+        // Add event listener for player commands from the API
+        this.addEventListener('player-command', (e) => {
+            if (!e.detail || !e.detail.command) return;
+            
+            const { command, data } = e.detail;
+            
+            switch (command) {
+                case 'play':
+                    if (this._audioElement && this._audioElement.paused) {
+                        this._audioElement.play();
+                    }
+                    break;
+                case 'pause':
+                    if (this._audioElement && !this._audioElement.paused) {
+                        this._audioElement.pause();
+                    }
+                    break;
+                case 'next':
+                    this._changeSong(1);
+                    break;
+                case 'previous':
+                    this._changeSong(-1);
+                    break;
+                case 'setVolume':
+                    if (data && typeof data.volume === 'number') {
+                        this._setVolume(data.volume);
+                        const volumeSlider = this._shadow.querySelector('.volume-slider');
+                        if (volumeSlider) volumeSlider.value = data.volume;
+                    }
+                    break;
+                case 'seekTo':
+                    if (this._audioElement && data && typeof data.position === 'number') {
+                        this._audioElement.currentTime = 
+                            data.position * this._audioElement.duration;
+                    }
+                    break;
+            }
+        });
+    }
+
+    disconnectedCallback() {
+        // Clean up resources when element is removed
+        this._stopVisualization();
+        
+        if (this._resizeObserver) {
+            this._resizeObserver.disconnect();
+        }
+        
+        if (this._audioElement) {
+            this._audioElement.pause();
+        }
+        
+        if (this._audioContext) {
+            this._audioContext.close();
+        }
+    }
+
+    render() {
+        if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) {
+            console.warn("No player data available or songs array is empty");
+            return;
+        }
+        
+        const { songs, currentIndex } = this._playerData;
+        const song = songs[currentIndex];
+        
+        if (!song) {
+            console.warn("Could not find current song at index", currentIndex);
+            return;
+        }
+        
+        console.log("Rendering song:", song); // For debugging
+        
+        // Update UI elements
+        const titleElement = this._shadow.querySelector('.track-title');
+        const artistElement = this._shadow.querySelector('.track-artist');
+        const albumElement = this._shadow.querySelector('.track-album');
+        
+        if (titleElement) titleElement.textContent = song.title || 'Unknown Title';
+        if (artistElement) artistElement.textContent = song.artist || 'Unknown Artist';
+        if (albumElement) {
+            if (song.album) {
+                albumElement.textContent = song.album;
+                albumElement.style.display = '';
+            } else {
+                albumElement.style.display = 'none';
+            }
+        }
+        
+        // Set artwork image
+        const artworkImage = this._shadow.querySelector('.artwork-image');
+        if (artworkImage) {
+            if (song.coverImage) {
+                artworkImage.src = song.coverImage;
+                artworkImage.alt = `Cover for ${song.title} by ${song.artist}`;
+            } else {
+                artworkImage.src = 'https://via.placeholder.com/500?text=Soft+Music';
+                artworkImage.alt = 'Default album cover';
+            }
+        }
+        
+        // Update buy button
+        const buyButton = this._shadow.querySelector('.buy-button');
+        if (buyButton) {
+            if (song.purchaseLink) {
+                buyButton.href = song.purchaseLink;
+                buyButton.style.display = 'block';
+            } else {
+                buyButton.style.display = 'none';
+            }
+        }
+        
+        // Update streaming service buttons
+        this._updateServiceButtons(song);
+        
+        // Update artist social links
+        this._updateSocialLinks(song);
+        
+        // Update playlist tracks
+        this._updatePlaylistTracks();
+        
+        // Load audio if available
+        if (this._audioElement && song.audioFile) {
+            console.log("Loading audio:", song.audioFile); // For debugging
+            this._loadSong(song.audioFile);
+        } else {
+            console.warn("Audio element not initialized or no audio file available");
+        }
+    }
+    
+    _updatePlaylistTracks() {
+        const tracksContainer = this._shadow.querySelector('.tracks-container');
+        if (!tracksContainer || !this._playerData || !this._playerData.songs) return;
+        
+        // Clear existing tracks
+        tracksContainer.innerHTML = '';
+        
+        // Add track items
+        this._playerData.songs.forEach((song, index) => {
+            const isActive = index === this._playerData.currentIndex;
+            
+            const trackItem = document.createElement('div');
+            trackItem.className = `track-item${isActive ? ' active' : ''}`;
+            trackItem.setAttribute('tabindex', '0');
+            trackItem.setAttribute('role', 'button');
+            trackItem.setAttribute('aria-label', `Play ${song.title} by ${song.artist}`);
+            
+            // Estimate duration from audio if not provided
+            let duration = song.duration || '0:00';
+            if (isActive && this._audioElement && this._audioElement.duration) {
+                duration = this._formatTime(this._audioElement.duration);
+            }
+            
+            trackItem.innerHTML = `
+                <div class="track-number">${index + 1}</div>
+                <div class="track-info-small">
+                    <div class="track-title-small">${song.title || 'Unknown Title'}</div>
+                    <div class="track-artist-small">${song.artist || 'Unknown Artist'}</div>
+                </div>
+                <div class="track-duration">${duration}</div>
+            `;
+            
+            trackItem.addEventListener('click', () => {
+                this._playerData.currentIndex = index;
+                this.render();
+                
+                // Start playing the selected track
+                if (this._audioElement) {
+                    this._audioElement.play();
+                }
+            });
+            
+            // Make it keyboard accessible
+            trackItem.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    trackItem.click();
+                }
+            });
+            
+            tracksContainer.appendChild(trackItem);
+        });
+    }
+
+    _changeSong(direction) {
+        if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) return;
+        
+        // Store current playing state before changing song
+        const wasPlaying = this._isPlaying;
+        
+        let newIndex;
+        
+        if (this._isShuffled) {
+            // Random selection for shuffle mode
+            newIndex = Math.floor(Math.random() * this._playerData.songs.length);
+            // Avoid playing the same song again
+            while (newIndex === this._playerData.currentIndex && this._playerData.songs.length > 1) {
+                newIndex = Math.floor(Math.random() * this._playerData.songs.length);
+            }
+        } else {
+            // Normal next/previous
+            newIndex = this._playerData.currentIndex + direction;
+            
+            // Loop around
+            if (newIndex < 0) newIndex = this._playerData.songs.length - 1;
+            if (newIndex >= this._playerData.songs.length) newIndex = 0;
+        }
+        
+        this._playerData.currentIndex = newIndex;
+        this.render();
+        
+        // Always auto-play the new song if the previous one was playing
+        if (wasPlaying && this._audioElement) {
+            this._audioElement.play();
+        }
+    }
+
+    _setPlayingState(isPlaying) {
+        this._isPlaying = isPlaying;
+        
+        // Update play/pause icon
+        const playIcon = this._shadow.querySelector('.play-icon');
+        const pauseIcon = this._shadow.querySelector('.pause-icon');
+        const artworkDisk = this._shadow.querySelector('.artwork-disk');
+        
+        if (isPlaying) {
+            if (playIcon) playIcon.style.display = 'none';
+            if (pauseIcon) pauseIcon.style.display = 'block';
+            if (artworkDisk) artworkDisk.classList.add('spinning');
+            
+            // Apply pressed effect to play button
+            const playButton = this._shadow.querySelector('.play-button');
+            if (playButton) playButton.classList.add('active');
+        } else {
+            if (playIcon) playIcon.style.display = 'block';
+            if (pauseIcon) pauseIcon.style.display = 'none';
+            if (artworkDisk) artworkDisk.classList.remove('spinning');
+            
+            // Remove pressed effect from play button
+            const playButton = this._shadow.querySelector('.play-button');
+            if (playButton) playButton.classList.remove('active');
+        }
+    }
+
+    _setVolume(volume) {
+        this._currentVolume = volume;
+        
+        if (this._audioElement) {
+            this._audioElement.volume = volume;
+        }
+        
+        // Update mute button state
+        const volumeOnIcon = this._shadow.querySelector('.volume-on-icon');
+        const volumeOffIcon = this._shadow.querySelector('.volume-off-icon');
+        
+        if (volume === 0) {
+            if (volumeOnIcon) volumeOnIcon.style.display = 'none';
+            if (volumeOffIcon) volumeOffIcon.style.display = 'block';
+        } else {
+            if (volumeOnIcon) volumeOnIcon.style.display = 'block';
+            if (volumeOffIcon) volumeOffIcon.style.display = 'none';
+        }
+    }
+
+    _toggleMute() {
+        if (this._audioElement) {
+            if (this._audioElement.volume > 0) {
+                this._lastVolume = this._audioElement.volume;
+                this._setVolume(0);
+                const volumeSlider = this._shadow.querySelector('.volume-slider');
+                if (volumeSlider) volumeSlider.value = 0;
+            } else {
+                const volumeToSet = this._lastVolume || 0.8;
+                this._setVolume(volumeToSet);
+                const volumeSlider = this._shadow.querySelector('.volume-slider');
+                if (volumeSlider) volumeSlider.value = volumeToSet;
+            }
+        }
+    }
+
+    _toggleShuffle() {
+        this._isShuffled = !this._isShuffled;
+        this._showNotification(this._isShuffled ? 'Shuffle on' : 'Shuffle off');
+    }
+
+    _toggleRepeat() {
+        this._isRepeat = !this._isRepeat;
+        this._showNotification(this._isRepeat ? 'Repeat on' : 'Repeat off');
+    }
+
+    _updateCurrentTime() {
+        if (!this._audioElement) return;
+        
+        const currentTime = this._audioElement.currentTime;
+        const duration = this._audioElement.duration;
+        
+        // Update current time display
+        const currentTimeElement = this._shadow.querySelector('.current-time');
+        if (currentTimeElement) {
+            currentTimeElement.textContent = this._formatTime(currentTime);
+        }
+        
+        // Update progress bar
+        if (!isNaN(duration) && duration > 0) {
+            const progress = currentTime / duration;
+            
+            const progressFill = this._shadow.querySelector('.progress-fill');
+            const progressKnob = this._shadow.querySelector('.progress-knob');
+            
+            if (progressFill) {
+                progressFill.style.width = `${progress * 100}%`;
+            }
+            
+            if (progressKnob) {
+                progressKnob.style.left = `${progress * 100}%`;
+            }
+            
+            // Update ARIA values for accessibility
+            const progressBar = this._shadow.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.setAttribute('aria-valuenow', Math.round(progress * 100));
+                progressBar.setAttribute('aria-valuetext', `${this._formatTime(currentTime)} of ${this._formatTime(duration)}`);
+            }
+        }
+    }
+
+    _updateDuration() {
+        if (!this._audioElement) return;
+        
+        const duration = this._audioElement.duration;
+        const totalTimeElement = this._shadow.querySelector('.total-time');
+        
+        if (!isNaN(duration) && totalTimeElement) {
+            totalTimeElement.textContent = this._formatTime(duration);
+            
+            // Update the current track's duration in the playlist
+            this._updateCurrentTrackDuration(this._formatTime(duration));
+            
+            // Initialize ARIA values
+            const progressBar = this._shadow.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.setAttribute('aria-valuemin', '0');
+                progressBar.setAttribute('aria-valuemax', '100');
+                progressBar.setAttribute('aria-valuenow', '0');
+            }
+        }
+    }
+    
+    _updateCurrentTrackDuration(duration) {
+        // Update the duration display in the playlist for the current track
+        if (this._playerData && typeof this._playerData.currentIndex !== 'undefined') {
+            const currentTrackItem = this._shadow.querySelector(`.track-item:nth-child(${this._playerData.currentIndex + 1}) .track-duration`);
+            if (currentTrackItem) {
+                currentTrackItem.textContent = duration;
+            }
+        }
+    }
+
+    _formatTime(seconds) {
+        if (isNaN(seconds)) return '0:00';
+        
+        seconds = Math.floor(seconds);
+        const minutes = Math.floor(seconds / 60);
+        seconds = seconds % 60;
+        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+
+    _updateServiceButtons(song) {
+        // Map service names to button selectors
+        const serviceMap = {
+            spotify: '.spotify-button',
+            youtube: '.youtube-button',
+            soundcloud: '.soundcloud-button',
+            apple: '.apple-button'
+        };
+        
+        // Hide all service buttons initially
+        for (const selector of Object.values(serviceMap)) {
+            const button = this._shadow.querySelector(selector);
+            if (button) button.style.display = 'none';
+        }
+        
+        // Show buttons for available services
+        if (song.streamingLinks) {
+            for (const [service, url] of Object.entries(song.streamingLinks)) {
+                const selector = serviceMap[service];
+                if (url && selector) {
+                    const button = this._shadow.querySelector(selector);
+                    if (button) {
+                        // Set the link as a data attribute for now
+                        button.dataset.url = url;
+                        button.style.display = 'flex';
+                    }
+                }
+            }
+        }
+    }
+    
+    _updateSocialLinks(song) {
+        // Map social platform names to link selectors
+        const socialMap = {
+            facebook: 'a[title="Facebook"]',
+            twitter: 'a[title="Twitter"]',
+            instagram: 'a[title="Instagram"]',
+            website: 'a[title="Website"]'
+        };
+        
+        // Hide all social links initially
+        for (const selector of Object.values(socialMap)) {
+            const link = this._shadow.querySelector(selector);
+            if (link) link.style.display = 'none';
+        }
+        
+        // Show links for available social platforms
+        if (song.artistSocial) {
+            for (const [platform, url] of Object.entries(song.artistSocial)) {
+                const selector = socialMap[platform];
+                if (url && selector) {
+                    const link = this._shadow.querySelector(selector);
+                    if (link) {
+                        link.href = url;
+                        link.style.display = 'flex';
+                    }
+                }
+            }
+        }
+    }
+    
+    _openServiceLink(service) {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const song = this._playerData.songs[this._playerData.currentIndex];
+        
+        if (song && song.streamingLinks && song.streamingLinks[service]) {
+            window.open(song.streamingLinks[service], '_blank');
+        } else {
+            this._showNotification(`No ${service} link available`);
+        }
+    }
+    
+    _handleShare() {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const song = this._playerData.songs[this._playerData.currentIndex];
+        if (!song) return;
+        
+        // Try the Web Share API first
+        if (navigator.share) {
+            navigator.share({
+                title: `${song.title} by ${song.artist}`,
+                text: `Check out "${song.title}" by ${song.artist}`,
+                url: song.shareUrl || window.location.href
+            })
+            .then(() => console.log('Shared successfully'))
+            .catch((error) => {
+                console.error('Error sharing:', error);
+                this._showShareNotification();
+            });
+        } else {
+            // Fallback to clipboard
+            this._showShareNotification();
+        }
+    }
+    
+    _showShareNotification() {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const song = this._playerData.songs[this._playerData.currentIndex];
+        if (!song) return;
+        
+        try {
+            const url = song.shareUrl || window.location.href;
+            navigator.clipboard.writeText(url)
+                .then(() => {
+                    this._showNotification('Link copied to clipboard');
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                    this._showNotification('Could not copy link');
+                });
+        } catch (error) {
+            console.error('Share failed:', error);
+            this._showNotification('Sharing not available');
+        }
+    }
+    
+    _showNotification(message) {
+        // First, remove any existing notification
+        const existingNotification = document.querySelector('.notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.textContent = message;
+        
+        // Add to DOM
+        document.body.appendChild(notification);
+        
+        // Force reflow to ensure transition works
+        notification.offsetHeight;
+        
+        // Show notification
+        setTimeout(() => {
+            notification.classList.add('show');
+        }, 10);
+        
+        // Automatically hide after a delay
+        setTimeout(() => {
+            notification.classList.remove('show');
+            
+            // Remove from DOM after transition
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 2000);
+    }
+
+    _buyNow() {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const song = this._playerData.songs[this._playerData.currentIndex];
+        
+        if (song && song.purchaseLink) {
+            window.open(song.purchaseLink, '_blank');
+        } else {
+            this._showNotification('Purchase link not available');
+        }
+    }
+}
+
+// Register the custom element with a new name
+window.customElements.define('neumorphic-player', NeumorphicPlayer);
