@@ -1368,4 +1368,419 @@ class ClayMusicPlayer extends HTMLElement {
                 
                 // Save theme preference to localStorage if available
                 try {
-                    localStorage.setItem('clay
+localStorage.setItem('clay-music-player-theme', theme);
+                } catch (e) {
+                    console.warn("LocalStorage not available", e);
+                }
+            });
+        });
+        
+        // Share buttons
+        const shareButtons = this._shadow.querySelectorAll('.social-button');
+        shareButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const platform = button.classList[1].replace('share-', '');
+                this._shareSong(platform);
+            });
+        });
+    }
+
+    _setupResizeListener() {
+        window.addEventListener('resize', () => {
+            if (this._canvas) {
+                const visualizerContainer = this._shadow.querySelector('.visualizer-container');
+                this._canvas.width = visualizerContainer.clientWidth;
+                this._canvas.height = visualizerContainer.clientHeight;
+            }
+        });
+    }
+
+    _changeTheme(theme) {
+        const host = this._shadow.host;
+        
+        // Remove existing theme classes
+        host.classList.remove('theme-earth-clay', 'theme-candy', 'theme-muted-nature', 'theme-twilight', 'theme-sherbet');
+        
+        // Add new theme class
+        if (theme !== 'default') {
+            host.classList.add(`theme-${theme}`);
+        }
+    }
+
+    _setPlayingState(isPlaying) {
+        this._isPlaying = isPlaying;
+        
+        const playIcon = this._shadow.querySelector('.play-icon');
+        const pauseIcon = this._shadow.querySelector('.pause-icon');
+        
+        if (isPlaying) {
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
+        } else {
+            playIcon.style.display = 'block';
+            pauseIcon.style.display = 'none';
+        }
+    }
+
+    _updateCurrentTime() {
+        if (!this._audioElement) return;
+        
+        const currentTimeElement = this._shadow.querySelector('.current-time');
+        if (currentTimeElement) {
+            currentTimeElement.textContent = this._formatTime(this._audioElement.currentTime);
+        }
+        
+        const progressFill = this._shadow.querySelector('.progress-fill');
+        if (progressFill) {
+            const percentage = (this._audioElement.currentTime / this._audioElement.duration) * 100;
+            progressFill.style.width = `${percentage}%`;
+        }
+    }
+
+    _updateDuration() {
+        if (!this._audioElement) return;
+        
+        const totalTimeElement = this._shadow.querySelector('.total-time');
+        if (totalTimeElement) {
+            totalTimeElement.textContent = this._formatTime(this._audioElement.duration);
+        }
+    }
+
+    _formatTime(seconds) {
+        if (isNaN(seconds)) return '0:00';
+        
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    _changeSong(direction) {
+        if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) return;
+        
+        let newIndex = this._playerData.currentIndex + direction;
+        
+        if (this._isShuffle) {
+            // Generate a random index different from the current one
+            do {
+                newIndex = Math.floor(Math.random() * this._playerData.songs.length);
+            } while (newIndex === this._playerData.currentIndex && this._playerData.songs.length > 1);
+        } else {
+            // Handle wrapping around the playlist
+            if (newIndex < 0) {
+                newIndex = this._playerData.songs.length - 1;
+            } else if (newIndex >= this._playerData.songs.length) {
+                newIndex = 0;
+            }
+        }
+        
+        this._playerData.currentIndex = newIndex;
+        
+        // Update UI and load new song
+        this.render();
+        
+        // Load and play the new song
+        const currentSong = this._playerData.songs[this._playerData.currentIndex];
+        if (currentSong && currentSong.audioFile) {
+            this._loadSong(currentSong.audioFile);
+            
+            // Auto play new song after change
+            if (this._isPlaying) {
+                this._audioElement.play();
+            }
+        }
+    }
+
+    _toggleShuffle() {
+        this._isShuffle = !this._isShuffle;
+        
+        const shuffleBtn = this._shadow.querySelector('.shuffle-btn');
+        if (shuffleBtn) {
+            shuffleBtn.classList.toggle('active', this._isShuffle);
+        }
+    }
+
+    _toggleRepeat() {
+        this._isRepeat = !this._isRepeat;
+        
+        const repeatBtn = this._shadow.querySelector('.repeat-btn');
+        if (repeatBtn) {
+            repeatBtn.classList.toggle('active', this._isRepeat);
+        }
+    }
+
+    _setVolume(volume) {
+        if (!this._audioElement) return;
+        
+        this._currentVolume = volume;
+        this._audioElement.volume = volume;
+        
+        // Update volume icon state
+        const volumeOnIcon = this._shadow.querySelector('.volume-on-icon');
+        const volumeOffIcon = this._shadow.querySelector('.volume-off-icon');
+        
+        if (volume === 0) {
+            volumeOnIcon.style.display = 'none';
+            volumeOffIcon.style.display = 'block';
+        } else {
+            volumeOnIcon.style.display = 'block';
+            volumeOffIcon.style.display = 'none';
+        }
+    }
+
+    _shareSong(platform) {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const currentSong = this._playerData.songs[this._playerData.currentIndex];
+        if (!currentSong) return;
+        
+        const title = encodeURIComponent(currentSong.title);
+        const artist = encodeURIComponent(currentSong.artist);
+        const url = encodeURIComponent(currentSong.shareUrl || window.location.href);
+        
+        // Create share URL based on platform
+        let shareUrl = '';
+        
+        switch (platform) {
+            case 'facebook':
+                shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+                break;
+            case 'twitter':
+                shareUrl = `https://twitter.com/intent/tweet?text=${title} by ${artist}&url=${url}`;
+                break;
+            case 'whatsapp':
+                shareUrl = `https://api.whatsapp.com/send?text=${title} by ${artist} ${url}`;
+                break;
+            case 'email':
+                shareUrl = `mailto:?subject=Check out this song: ${title}&body=I thought you might like this song: ${title} by ${artist}. Listen here: ${url}`;
+                break;
+            case 'copy':
+                this._copyToClipboard(currentSong.shareUrl || window.location.href);
+                return;
+        }
+        
+        // Open share URL in new window
+        if (shareUrl) {
+            window.open(shareUrl, '_blank');
+        }
+    }
+
+    _copyToClipboard(text) {
+        // Create a temporary input element
+        const input = document.createElement('input');
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        
+        // Execute copy command
+        try {
+            document.execCommand('copy');
+            this._showNotification('Link copied to clipboard');
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            this._showNotification('Failed to copy link');
+        }
+        
+        // Remove temporary element
+        document.body.removeChild(input);
+    }
+
+    _showNotification(message) {
+        // Create a notification element
+        const notification = document.createElement('div');
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        `;
+        
+        // Add to shadow DOM
+        this._shadow.querySelector('.clay-player').appendChild(notification);
+        
+        // Show notification
+        setTimeout(() => {
+            notification.style.opacity = '1';
+        }, 10);
+        
+        // Hide and remove notification after delay
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                notification.remove();
+            }, 300);
+        }, 2000);
+    }
+
+    _buyNow() {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const currentSong = this._playerData.songs[this._playerData.currentIndex];
+        if (currentSong && currentSong.purchaseLink) {
+            window.open(currentSong.purchaseLink, '_blank');
+        }
+    }
+
+    render() {
+        if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) {
+            console.warn("No song data available for rendering");
+            return;
+        }
+        
+        const currentSong = this._playerData.songs[this._playerData.currentIndex];
+        if (!currentSong) return;
+        
+        // Update album art
+        const albumArt = this._shadow.querySelector('.album-art');
+        if (albumArt) {
+            albumArt.src = currentSong.coverImage || '';
+            albumArt.alt = `${currentSong.title} by ${currentSong.artist}`;
+        }
+        
+        // Update track info
+        const trackTitle = this._shadow.querySelector('.track-title');
+        const trackArtist = this._shadow.querySelector('.track-artist');
+        const trackAlbum = this._shadow.querySelector('.track-album');
+        
+        if (trackTitle) trackTitle.textContent = currentSong.title;
+        if (trackArtist) trackArtist.textContent = currentSong.artist;
+        if (trackAlbum) trackAlbum.textContent = currentSong.album;
+        
+        // Update playlist
+        this._renderPlaylist();
+        
+        // Update streaming links
+        this._updateStreamingLinks(currentSong.streamingLinks);
+        
+        // Update artist social links
+        this._updateArtistLinks(currentSong.artistSocial);
+        
+        // Update buy button
+        const buyButton = this._shadow.querySelector('.buy-button');
+        if (buyButton) {
+            buyButton.style.display = currentSong.purchaseLink ? 'block' : 'none';
+        }
+    }
+
+    _renderPlaylist() {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const songList = this._shadow.querySelector('.song-list');
+        const playlistCount = this._shadow.querySelector('.playlist-count');
+        
+        if (songList) {
+            // Clear existing playlist
+            songList.innerHTML = '';
+            
+            // Populate with songs
+            this._playerData.songs.forEach((song, index) => {
+                const songItem = document.createElement('div');
+                songItem.className = 'song-item';
+                if (index === this._playerData.currentIndex) {
+                    songItem.classList.add('active');
+                }
+                
+                songItem.innerHTML = `
+                    <div class="song-item-info">
+                        <div class="song-item-title">${song.title}</div>
+                        <div class="song-item-artist">${song.artist}</div>
+                    </div>
+                `;
+                
+                songItem.addEventListener('click', () => {
+                    this._playerData.currentIndex = index;
+                    this.render();
+                    
+                    // Load and play the selected song
+                    if (song.audioFile) {
+                        this._loadSong(song.audioFile);
+                        this._audioElement.play();
+                    }
+                });
+                
+                songList.appendChild(songItem);
+            });
+            
+            // Update playlist count
+            if (playlistCount) {
+                playlistCount.textContent = this._playerData.songs.length;
+            }
+        }
+    }
+
+    _updateStreamingLinks(links) {
+        if (!links) return;
+        
+        const serviceElements = {
+            spotify: this._shadow.querySelector('.service-spotify'),
+            youtube: this._shadow.querySelector('.service-youtube'),
+            soundcloud: this._shadow.querySelector('.service-soundcloud'),
+            apple: this._shadow.querySelector('.service-apple')
+        };
+        
+        // Update each link if available
+        for (const [service, url] of Object.entries(links)) {
+            if (serviceElements[service] && url) {
+                serviceElements[service].href = url;
+                serviceElements[service].style.display = 'flex';
+            } else if (serviceElements[service]) {
+                serviceElements[service].style.display = 'none';
+            }
+        }
+    }
+
+    _updateArtistLinks(links) {
+        if (!links) return;
+        
+        const artistElements = {
+            facebook: this._shadow.querySelector('.artist-facebook'),
+            twitter: this._shadow.querySelector('.artist-twitter'),
+            instagram: this._shadow.querySelector('.artist-instagram'),
+            youtube: this._shadow.querySelector('.artist-youtube'),
+            tiktok: this._shadow.querySelector('.artist-tiktok'),
+            website: this._shadow.querySelector('.artist-website')
+        };
+        
+        // Update each link if available
+        for (const [platform, url] of Object.entries(links)) {
+            if (artistElements[platform] && url) {
+                artistElements[platform].href = url;
+                artistElements[platform].style.display = 'flex';
+            } else if (artistElements[platform]) {
+                artistElements[platform].style.display = 'none';
+            }
+        }
+    }
+
+    disconnectedCallback() {
+        // Clean up resources when component is removed
+        if (this._audioElement) {
+            this._audioElement.pause();
+            this._audioElement.src = '';
+        }
+        
+        if (this._audioContext) {
+            this._audioContext.close();
+        }
+        
+        if (this._animationId) {
+            cancelAnimationFrame(this._animationId);
+        }
+        
+        // Remove event listeners
+        window.removeEventListener('resize', this._setupResizeListener);
+    }
+}
+
+// Define the custom element
+customElements.define('clay-music-player', ClayMusicPlayer);
