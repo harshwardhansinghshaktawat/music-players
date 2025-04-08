@@ -968,7 +968,7 @@ class NeumorphicPlayer extends HTMLElement {
             <div class="player-container">
                 <!-- Player Header -->
                 <div class="player-header">
-                    <h1 class="player-title">Soft Music</h1>
+                    <h1 class="player-title">Music Player</h1>
                     
                     <div class="theme-selector">
                         <div class="theme-option theme-light-gray active" data-theme="default" title="Light Gray Theme" tabindex="0"></div>
