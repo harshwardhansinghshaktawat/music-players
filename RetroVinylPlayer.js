@@ -1208,6 +1208,956 @@ class RetroVinylPlayer extends HTMLElement {
         // Handle resize events
         this._setupResizeListener();
     }
+
+    static get observedAttributes() {
+        return ['player-data'];
+    }
+
+    attributeChangedCallback(name, oldValue, newValue) {
+        if (name === 'player-data' && newValue !== oldValue) {
+            try {
+                console.log("Received player data:", newValue);
+                this._playerData = JSON.parse(newValue);
+                
+                // Ensure songs have all required properties
+                if (this._playerData && this._playerData.songs) {
+                    this._playerData.songs = this._playerData.songs.map(song => {
+                        return {
+                            title: song.title || 'Unknown Title',
+                            artist: song.artist || 'Unknown Artist',
+                            album: song.album || '',
+                            audioFile: song.audioFile || '',
+                            coverImage: song.coverImage || '',
+                            streamingLinks: song.streamingLinks || {},
+                            artistSocial: song.artistSocial || {},
+                            purchaseLink: song.purchaseLink || null,
+                            shareUrl: song.shareUrl || window.location.href
+                        };
+                    });
+                }
+                
+                this.render();
+                
+                // If audio element exists, load the current song
+                if (this._audioElement && 
+                    this._playerData && 
+                    this._playerData.songs && 
+                    this._playerData.songs.length > 0) {
+                    
+                    const currentSong = this._playerData.songs[this._playerData.currentIndex];
+                    if (currentSong && currentSong.audioFile) {
+                        this._loadSong(currentSong.audioFile);
+                    }
+                }
+            } catch (e) {
+                console.error("Error parsing player data:", e);
+            }
+        }
+    }
+
+    _loadWaveSurferScript() {
+        return new Promise((resolve, reject) => {
+            if (window.WaveSurfer) {
+                resolve();
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/wavesurfer.js/6.6.4/wavesurfer.min.js';
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load WaveSurfer.js'));
+            document.head.appendChild(script);
+        });
+    }
+
+    _initializeWaveSurfer() {
+        if (!window.WaveSurfer) return;
+        
+        // Get direct reference to canvas for visualization
+        this._canvas = this._shadow.querySelector('#audioVisualizer');
+        this._canvasCtx = this._canvas.getContext('2d');
+        
+        // Set canvas dimensions
+        const visualizerContainer = this._shadow.querySelector('.visualizer-screen');
+        this._canvas.width = visualizerContainer.clientWidth;
+        this._canvas.height = visualizerContainer.clientHeight;
+        
+        // Create hidden audio element for visualization and playback
+        this._audioElement = document.createElement('audio');
+        this._audioElement.crossOrigin = 'anonymous';
+        this._audioElement.setAttribute('preload', 'auto');
+        
+        // Create Audio API context and analyzer
+        this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this._analyser = this._audioContext.createAnalyser();
+        this._analyser.fftSize = 256;
+        this._dataArray = new Uint8Array(this._analyser.frequencyBinCount);
+        
+        // Connect audio element to analyzer
+        this._source = this._audioContext.createMediaElementSource(this._audioElement);
+        this._source.connect(this._analyser);
+        this._analyser.connect(this._audioContext.destination);
+        
+        // Set up audio element events
+        this._audioElement.addEventListener('loadedmetadata', () => {
+            this._updateDuration();
+            const totalTimeElement = this._shadow.querySelector('.total-time');
+            if (totalTimeElement) {
+                totalTimeElement.textContent = this._formatTime(this._audioElement.duration);
+            }
+        });
+        
+        this._audioElement.addEventListener('timeupdate', () => {
+            this._updateCurrentTime();
+        });
+        
+        this._audioElement.addEventListener('play', () => {
+            this._setPlayingState(true);
+            // Resume audio context if suspended (required by browsers)
+            if (this._audioContext.state === 'suspended') {
+                this._audioContext.resume();
+            }
+            // Start visualization
+            this._startVisualization();
+        });
+        
+        this._audioElement.addEventListener('pause', () => {
+            this._setPlayingState(false);
+            // Stop visualization
+            this._stopVisualization();
+        });
+        
+        this._audioElement.addEventListener('ended', () => {
+            this._setPlayingState(false);
+            this._stopVisualization();
+            
+            // Auto play next if not in repeat mode
+            if (!this._isRepeat) {
+                this._changeSong(1);
+            } else {
+                // For repeat mode, play the same song again
+                this._audioElement.currentTime = 0;
+                this._audioElement.play();
+            }
+        });
+        
+        // Load the current song if data is available
+        if (this._playerData && this._playerData.songs && this._playerData.songs.length > 0) {
+            const currentSong = this._playerData.songs[this._playerData.currentIndex];
+            if (currentSong && currentSong.audioFile) {
+                this._loadSong(currentSong.audioFile);
+            }
+        }
+    }
+    
+    _loadSong(url) {
+        if (this._audioElement) {
+            console.log("Loading song:", url);
+            this._audioElement.src = url;
+            this._audioElement.load();
+        }
+    }
+    
+    _startVisualization() {
+        if (!this._analyser || !this._canvasCtx) return;
+        
+        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+    }
+    
+    _stopVisualization() {
+        if (this._animationId) {
+            cancelAnimationFrame(this._animationId);
+            this._animationId = null;
+        }
+        
+        // Clear canvas
+        if (this._canvasCtx && this._canvas) {
+            this._canvasCtx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+        }
+    }
+    
+    _drawVisualization() {
+        if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
+        
+        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+        
+        // Get frequency data
+        this._analyser.getByteFrequencyData(this._dataArray);
+        
+        const canvas = this._canvas;
+        const ctx = this._canvasCtx;
+        
+        // Clear canvas with retro black background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw retro bar visualization in green
+        const barCount = this._dataArray.length / 2;
+        const barWidth = canvas.width / barCount * 0.8;
+        const barSpacing = canvas.width / barCount * 0.2;
+        
+        // Use retro green color for visualization
+        ctx.fillStyle = 'rgba(0, 255, 120, 0.8)';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'rgba(0, 255, 120, 0.5)';
+        
+        for (let i = 0; i < barCount; i++) {
+            // Calculate bar height based on frequency data
+            const index = Math.floor(i * this._dataArray.length / barCount);
+            const value = this._dataArray[index];
+            const percent = value / 255;
+            const barHeight = percent * canvas.height * 0.9;
+            
+            // Draw bar with retro effect - bars growing from bottom
+            const x = i * (barWidth + barSpacing);
+            const y = canvas.height - barHeight;
+            
+            // Draw bar with slight rounded corners for retro look
+            this._roundRect(ctx, x, y, barWidth, barHeight, 2);
+            ctx.fill();
+            
+            // Add retro scanline effect
+            for (let j = 0; j < barHeight; j += 4) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                ctx.fillRect(x, y + j, barWidth, 1);
+            }
+            ctx.fillStyle = 'rgba(0, 255, 120, 0.8)';
+        }
+        
+        // Reset shadow
+        ctx.shadowBlur = 0;
+        
+        // Animate VU meters based on audio levels
+        this._updateVUMeters(this._dataArray);
+    }
+    
+    _updateVUMeters(dataArray) {
+        if (!dataArray) return;
+        
+        // Get average levels for left and right channels
+        let leftSum = 0;
+        let rightSum = 0;
+        
+        // Use first half for left channel, second half for right channel
+        const halfLength = dataArray.length / 2;
+        
+        for (let i = 0; i < halfLength; i++) {
+            leftSum += dataArray[i];
+            rightSum += dataArray[i + halfLength];
+        }
+        
+        const leftAvg = leftSum / halfLength / 255;
+        const rightAvg = rightSum / halfLength / 255;
+        
+        // Update VU meters
+        const leftNeedle = this._shadow.querySelector('.vu-meter:first-child .vu-meter-needle');
+        const rightNeedle = this._shadow.querySelector('.vu-meter:last-child .vu-meter-needle');
+        
+        if (leftNeedle) {
+            // Map 0-1 range to -60deg to 60deg for needle rotation
+            const leftRotation = -60 + leftAvg * 120;
+            leftNeedle.style.transform = `translateX(-50%) rotate(${leftRotation}deg)`;
+        }
+        
+if (rightNeedle) {
+            const rightRotation = -60 + rightAvg * 120;
+            rightNeedle.style.transform = `translateX(-50%) rotate(${rightRotation}deg)`;
+        }
+    }
+    
+    // Helper to draw rounded rectangles
+    _roundRect(ctx, x, y, width, height, radius) {
+        if (height < radius * 2) radius = height / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height);
+        ctx.lineTo(x, y + height);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+    }
+
+    _setupEventListeners() {
+        // Play/Pause button
+        const playBtn = this._shadow.querySelector('.play-btn');
+        if (playBtn) {
+            playBtn.addEventListener('click', () => {
+                if (this._audioElement) {
+                    if (this._audioElement.paused) {
+                        this._audioElement.play();
+                    } else {
+                        this._audioElement.pause();
+                    }
+                }
+            });
+        }
+
+        // Next button
+        const nextBtn = this._shadow.querySelector('.next-btn');
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                this._changeSong(1);
+            });
+        }
+
+        // Previous button
+        const prevBtn = this._shadow.querySelector('.prev-btn');
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                this._changeSong(-1);
+            });
+        }
+
+        // Shuffle button
+        const shuffleBtn = this._shadow.querySelector('.shuffle-btn');
+        if (shuffleBtn) {
+            shuffleBtn.addEventListener('click', () => {
+                this._toggleShuffle();
+            });
+        }
+
+        // Repeat button
+        const repeatBtn = this._shadow.querySelector('.repeat-btn');
+        if (repeatBtn) {
+            repeatBtn.addEventListener('click', () => {
+                this._toggleRepeat();
+            });
+        }
+
+        // Volume control - using rotary knob interface
+        const volumeKnob = this._shadow.querySelector('.volume-knob');
+        if (volumeKnob) {
+            // Set initial rotation based on default volume
+            volumeKnob.style.setProperty('--rotation', `${this._currentVolume * 270}deg`);
+            
+            // Make the knob draggable
+            let isDragging = false;
+            let startY;
+            let startVolume;
+            
+            volumeKnob.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startY = e.clientY;
+                startVolume = this._currentVolume;
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+                e.preventDefault();
+            });
+            
+            volumeKnob.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                startY = e.touches[0].clientY;
+                startVolume = this._currentVolume;
+                document.addEventListener('touchmove', handleTouchMove);
+                document.addEventListener('touchend', handleTouchEnd);
+                e.preventDefault();
+            });
+            
+            const handleMouseMove = (e) => {
+                if (!isDragging) return;
+                const deltaY = startY - e.clientY;
+                let newVolume = startVolume + (deltaY / 200);
+                newVolume = Math.max(0, Math.min(1, newVolume));
+                this._setVolume(newVolume);
+                volumeKnob.style.setProperty('--rotation', `${newVolume * 270}deg`);
+            };
+            
+            const handleTouchMove = (e) => {
+                if (!isDragging) return;
+                const deltaY = startY - e.touches[0].clientY;
+                let newVolume = startVolume + (deltaY / 200);
+                newVolume = Math.max(0, Math.min(1, newVolume));
+                this._setVolume(newVolume);
+                volumeKnob.style.setProperty('--rotation', `${newVolume * 270}deg`);
+            };
+            
+            const handleMouseUp = () => {
+                isDragging = false;
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+            };
+            
+            const handleTouchEnd = () => {
+                isDragging = false;
+                document.removeEventListener('touchmove', handleTouchMove);
+                document.removeEventListener('touchend', handleTouchEnd);
+            };
+        }
+
+        // Progress bar
+        const progressBar = this._shadow.querySelector('.progress-bar');
+        if (progressBar) {
+            progressBar.addEventListener('click', (e) => {
+                if (!this._audioElement) return;
+                
+                const rect = progressBar.getBoundingClientRect();
+                const position = (e.clientX - rect.left) / rect.width;
+                this._audioElement.currentTime = position * this._audioElement.duration;
+            });
+        }
+
+        // Buy now button
+        const buyNowBtn = this._shadow.querySelector('.buy-now-btn');
+        if (buyNowBtn) {
+            buyNowBtn.addEventListener('click', () => {
+                this._buyNow();
+            });
+        }
+        
+        // Panel tabs for social, streaming, and artist links
+        const panelTabs = this._shadow.querySelectorAll('.panel-tab');
+        panelTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs
+                panelTabs.forEach(t => t.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                tab.classList.add('active');
+                
+                // Hide all content panels
+                const contents = this._shadow.querySelectorAll('.panel-content');
+                contents.forEach(c => c.classList.remove('active'));
+                
+                // Show content for active tab
+                const tabName = tab.getAttribute('data-tab');
+                const activeContent = this._shadow.querySelector(`.panel-content[data-content="${tabName}"]`);
+                if (activeContent) {
+                    activeContent.classList.add('active');
+                }
+            });
+        });
+        
+        // Setup share buttons
+        this._setupShareButtons();
+        
+        // Add keyboard accessibility
+        this._setupKeyboardAccessibility();
+    }
+    
+    _setupResizeListener() {
+        // Create ResizeObserver to handle container resizing
+        if (typeof ResizeObserver !== 'undefined') {
+            this._resizeObserver = new ResizeObserver(() => this._handleResize());
+            this._resizeObserver.observe(this);
+        } else {
+            // Fallback for browsers without ResizeObserver
+            window.addEventListener('resize', () => this._handleResize());
+        }
+    }
+
+    _handleResize() {
+        // Update canvas size when container resizes
+        if (this._canvas) {
+            const visualizerContainer = this._shadow.querySelector('.visualizer-screen');
+            if (visualizerContainer) {
+                this._canvas.width = visualizerContainer.clientWidth;
+                this._canvas.height = visualizerContainer.clientHeight;
+            }
+        }
+    }
+    
+    _setupKeyboardAccessibility() {
+        // Add keyboard navigation for interactive elements
+        const interactiveElements = this._shadow.querySelectorAll('.btn, .song-item, .service-link, .share-button, .artist-social-link, .panel-tab');
+        interactiveElements.forEach(element => {
+            if (!element.hasAttribute('tabindex')) {
+                element.setAttribute('tabindex', '0');
+            }
+            
+            element.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    element.click();
+                }
+            });
+        });
+    }
+
+    _changeSong(direction) {
+        if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) return;
+        
+        // Store current playing state before changing song
+        const wasPlaying = this._isPlaying;
+        
+        let newIndex;
+        
+        if (this._isShuffled) {
+            // Random selection for shuffle mode
+            newIndex = Math.floor(Math.random() * this._playerData.songs.length);
+            // Avoid playing the same song again
+            while (newIndex === this._playerData.currentIndex && this._playerData.songs.length > 1) {
+                newIndex = Math.floor(Math.random() * this._playerData.songs.length);
+            }
+        } else {
+            // Normal next/previous
+            newIndex = this._playerData.currentIndex + direction;
+            
+            // Loop around
+            if (newIndex < 0) newIndex = this._playerData.songs.length - 1;
+            if (newIndex >= this._playerData.songs.length) newIndex = 0;
+        }
+        
+        this._playerData.currentIndex = newIndex;
+        this.render();
+        
+        // Animate the tonearm movement
+        this._animateTonearm(wasPlaying);
+        
+        // Always auto-play the new song if the previous one was playing
+        if (wasPlaying && this._audioElement) {
+            // Small delay to allow tonearm animation
+            setTimeout(() => {
+                this._audioElement.play();
+            }, 500);
+        }
+    }
+    
+    _animateTonearm(play) {
+        const tonearm = this._shadow.querySelector('.tonearm');
+        const platter = this._shadow.querySelector('.platter');
+        
+        if (tonearm) {
+            // Move tonearm away from record first
+            tonearm.style.transform = 'rotate(-30deg)';
+            
+            // Then move to playing position after a delay
+            if (play) {
+                setTimeout(() => {
+                    tonearm.style.transform = 'rotate(15deg)';
+                    if (platter) {
+                        platter.classList.add('playing');
+                    }
+                }, 300);
+            }
+        }
+    }
+
+    _setPlayingState(isPlaying) {
+        this._isPlaying = isPlaying;
+        
+        const playIcon = this._shadow.querySelector('.play-icon');
+        const pauseIcon = this._shadow.querySelector('.pause-icon');
+        const tonearm = this._shadow.querySelector('.tonearm');
+        const platter = this._shadow.querySelector('.platter');
+        
+        if (isPlaying) {
+            if (playIcon) playIcon.style.display = 'none';
+            if (pauseIcon) pauseIcon.style.display = 'block';
+            
+            // Animated tonearm and spinning platter when playing
+            if (tonearm) tonearm.classList.add('playing');
+            if (platter) platter.classList.add('playing');
+            
+        } else {
+            if (playIcon) playIcon.style.display = 'block';
+            if (pauseIcon) pauseIcon.style.display = 'none';
+            
+            // Stop animations when paused
+            if (tonearm) tonearm.classList.remove('playing');
+            if (platter) platter.classList.remove('playing');
+        }
+    }
+
+    _setVolume(volume) {
+        this._currentVolume = volume;
+        
+        if (this._audioElement) {
+            this._audioElement.volume = volume;
+        }
+    }
+
+    _toggleShuffle() {
+        this._isShuffled = !this._isShuffled;
+        const shuffleBtn = this._shadow.querySelector('.shuffle-btn');
+        
+        if (shuffleBtn) {
+            if (this._isShuffled) {
+                shuffleBtn.style.color = getComputedStyle(this).getPropertyValue('--primary-color');
+                shuffleBtn.style.textShadow = '0 0 10px var(--primary-color)';
+            } else {
+                shuffleBtn.style.color = '';
+                shuffleBtn.style.textShadow = '';
+            }
+        }
+    }
+
+    _toggleRepeat() {
+        this._isRepeat = !this._isRepeat;
+        const repeatBtn = this._shadow.querySelector('.repeat-btn');
+        
+        if (repeatBtn) {
+            if (this._isRepeat) {
+                repeatBtn.style.color = getComputedStyle(this).getPropertyValue('--primary-color');
+                repeatBtn.style.textShadow = '0 0 10px var(--primary-color)';
+            } else {
+                repeatBtn.style.color = '';
+                repeatBtn.style.textShadow = '';
+            }
+        }
+    }
+
+    _updateCurrentTime() {
+        if (!this._audioElement) return;
+        
+        const currentTime = this._audioElement.currentTime;
+        const currentTimeElement = this._shadow.querySelector('.current-time');
+        if (currentTimeElement) {
+            currentTimeElement.textContent = this._formatTime(currentTime);
+        }
+        
+        // Update progress bar
+        const progress = this._audioElement.currentTime / this._audioElement.duration;
+        const progressCurrent = this._shadow.querySelector('.progress-current');
+        const progressIndicator = this._shadow.querySelector('.progress-indicator');
+        
+        if (!isNaN(progress)) {
+            if (progressCurrent) progressCurrent.style.width = `${progress * 100}%`;
+            if (progressIndicator) progressIndicator.style.left = `${progress * 100}%`;
+        }
+    }
+
+    _updateDuration() {
+        if (!this._audioElement) return;
+        
+        const duration = this._audioElement.duration;
+        const totalTimeElement = this._shadow.querySelector('.total-time');
+        
+        if (!isNaN(duration) && totalTimeElement) {
+            totalTimeElement.textContent = this._formatTime(duration);
+        }
+    }
+
+    _formatTime(seconds) {
+        seconds = Math.floor(seconds);
+        const minutes = Math.floor(seconds / 60);
+        seconds = seconds % 60;
+        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    
+    _setupShareButtons() {
+        const shareButtons = {
+            facebook: this._shadow.querySelector('.share-facebook'),
+            twitter: this._shadow.querySelector('.share-twitter'),
+            whatsapp: this._shadow.querySelector('.share-whatsapp'),
+            email: this._shadow.querySelector('.share-email'),
+            copy: this._shadow.querySelector('.share-copy')
+        };
+        
+        // Get current song info
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const song = this._playerData.songs[this._playerData.currentIndex];
+        if (!song) return;
+        
+        const songTitle = song.title || 'Unknown Title';
+        const artistName = song.artist || 'Unknown Artist';
+        const shareText = `Listen to "${songTitle}" by ${artistName}`;
+        const shareUrl = song.shareUrl || window.location.href;
+        
+        // Facebook share
+        if (shareButtons.facebook) {
+            shareButtons.facebook.addEventListener('click', () => {
+                window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`, '_blank');
+            });
+        }
+        
+        // Twitter share
+        if (shareButtons.twitter) {
+            shareButtons.twitter.addEventListener('click', () => {
+                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
+            });
+        }
+        
+        // WhatsApp share
+        if (shareButtons.whatsapp) {
+            shareButtons.whatsapp.addEventListener('click', () => {
+                window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank');
+            });
+        }
+        
+        // Email share
+        if (shareButtons.email) {
+            shareButtons.email.addEventListener('click', () => {
+                window.open(`mailto:?subject=${encodeURIComponent(shareText)}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`, '_blank');
+            });
+        }
+        
+        // Copy link
+        if (shareButtons.copy) {
+            shareButtons.copy.addEventListener('click', () => {
+                try {
+                    navigator.clipboard.writeText(shareUrl);
+                    alert('Link copied to clipboard!');
+                } catch (err) {
+                    console.error('Failed to copy link: ', err);
+                    
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = shareUrl;
+                    textArea.style.position = 'fixed';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        alert('Link copied to clipboard!');
+                    } catch (err) {
+                        console.error('Fallback copy failed: ', err);
+                    }
+                    
+                    document.body.removeChild(textArea);
+                }
+            });
+        }
+    }
+
+    _buyNow() {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        const song = this._playerData.songs[this._playerData.currentIndex];
+        
+        if (song && song.purchaseLink) {
+            window.open(song.purchaseLink, '_blank');
+        } else {
+            alert('Purchase link not available for this soundtrack.');
+        }
+    }
+    
+    _updateStreamingLinks(song) {
+        // Update streaming service links if available in the song data
+        const links = {
+            spotify: this._shadow.querySelector('.service-spotify'),
+            youtube: this._shadow.querySelector('.service-youtube'),
+            soundcloud: this._shadow.querySelector('.service-soundcloud'),
+            apple: this._shadow.querySelector('.service-apple')
+        };
+        
+        // Always hide all links first
+        for (const link of Object.values(links)) {
+            if (link) link.style.display = 'none';
+        }
+        
+        // Only show links that are explicitly provided in the song data
+        if (song.streamingLinks) {
+            for (const [service, url] of Object.entries(song.streamingLinks)) {
+                if (url && links[service]) {
+                    links[service].href = url;
+                    links[service].style.display = 'flex';
+                }
+            }
+        }
+    }
+    
+    _updateArtistSocialLinks(song) {
+        // Update artist social links if available
+        const links = {
+            facebook: this._shadow.querySelector('.artist-facebook'),
+            twitter: this._shadow.querySelector('.artist-twitter'),
+            instagram: this._shadow.querySelector('.artist-instagram'),
+            youtube: this._shadow.querySelector('.artist-youtube'),
+            tiktok: this._shadow.querySelector('.artist-tiktok'),
+            website: this._shadow.querySelector('.artist-website')
+        };
+        
+        // Always hide all links first
+        for (const link of Object.values(links)) {
+            if (link) link.style.display = 'none';
+        }
+        
+        // Only show links that are explicitly provided in the artist data
+        if (song.artistSocial) {
+            for (const [platform, url] of Object.entries(song.artistSocial)) {
+                if (url && links[platform]) {
+                    links[platform].href = url;
+                    links[platform].style.display = 'flex';
+                }
+            }
+        }
+    }
+
+    _updateSongNavigation() {
+        const songNavigationContainer = this._shadow.querySelector('.song-navigation');
+        if (!songNavigationContainer) return;
+        
+        // Clear existing content
+        songNavigationContainer.innerHTML = '';
+        
+        // Create song list
+        if (this._playerData && this._playerData.songs) {
+            this._playerData.songs.forEach((song, index) => {
+                const songItem = document.createElement('div');
+                songItem.className = 'song-item';
+                songItem.setAttribute('tabindex', '0'); // Make focusable for accessibility
+                
+                if (index === this._playerData.currentIndex) {
+                    songItem.classList.add('active');
+                }
+                
+                songItem.innerHTML = `
+                    <div class="song-item-info">
+                        <div class="song-item-title">${song.title || 'Unknown'}</div>
+                        <div class="song-item-artist">${song.artist || 'Unknown'}</div>
+                    </div>
+                `;
+                
+                songItem.addEventListener('click', () => {
+                    const wasPlaying = this._isPlaying;
+                    this._playerData.currentIndex = index;
+                    this.render();
+                    
+                    // Animate the tonearm
+                    this._animateTonearm(wasPlaying);
+                    
+                    if (wasPlaying && this._audioElement) {
+                        setTimeout(() => {
+                            this._audioElement.play();
+                        }, 500);
+                    }
+                });
+                
+                // Add keyboard support
+                songItem.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        songItem.click();
+                    }
+                });
+                
+                songNavigationContainer.appendChild(songItem);
+            });
+        }
+    }
+
+    connectedCallback() {
+        if (this._playerData) {
+            this.render();
+        }
+        
+        // Add event listener for player commands from the API
+        this.addEventListener('player-command', (e) => {
+            if (!e.detail || !e.detail.command) return;
+            
+            const { command, data } = e.detail;
+            
+            switch (command) {
+                case 'play':
+                    if (this._audioElement && this._audioElement.paused) {
+                        this._audioElement.play();
+                    }
+                    break;
+                case 'pause':
+                    if (this._audioElement && !this._audioElement.paused) {
+                        this._audioElement.pause();
+                    }
+                    break;
+                case 'next':
+                    this._changeSong(1);
+                    break;
+                case 'previous':
+                    this._changeSong(-1);
+                    break;
+                case 'setVolume':
+                    if (data && typeof data.volume === 'number') {
+                        this._setVolume(data.volume);
+                        // Update volume knob rotation
+                        const volumeKnob = this._shadow.querySelector('.volume-knob');
+                        if (volumeKnob) {
+                            volumeKnob.style.setProperty('--rotation', `${data.volume * 270}deg`);
+                        }
+                    }
+                    break;
+                case 'seekTo':
+                    if (this._audioElement && data && typeof data.position === 'number') {
+                        this._audioElement.currentTime = 
+                            data.position * this._audioElement.duration;
+                    }
+                    break;
+            }
+        });
+    }
+
+    disconnectedCallback() {
+        // Clean up resources when element is removed
+        this._stopVisualization();
+        
+        if (this._resizeObserver) {
+            this._resizeObserver.disconnect();
+        }
+        
+        if (this._audioElement) {
+            this._audioElement.pause();
+        }
+        
+        if (this._audioContext) {
+            this._audioContext.close();
+        }
+    }
+
+    render() {
+        if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) {
+            console.warn("No player data available or songs array is empty");
+            return;
+        }
+        
+        const { songs, currentIndex } = this._playerData;
+        const song = songs[currentIndex];
+        
+        if (!song) {
+            console.warn("Could not find current song at index", currentIndex);
+            return;
+        }
+        
+        console.log("Rendering song:", song);
+        
+        // Update UI elements
+        const titleElement = this._shadow.querySelector('.title');
+        const artistElement = this._shadow.querySelector('.artist');
+        const albumElement = this._shadow.querySelector('.album');
+        
+        if (titleElement) titleElement.textContent = song.title || 'Unknown Title';
+        if (artistElement) artistElement.textContent = song.artist || 'Unknown Artist';
+        if (albumElement) albumElement.textContent = song.album || '';
+        
+        // Set record label (album cover)
+        const recordLabel = this._shadow.querySelector('.record-label');
+        if (recordLabel) {
+            if (song.coverImage) {
+                recordLabel.style.backgroundImage = `url("${song.coverImage}")`;
+            } else {
+                recordLabel.style.backgroundImage = 'url("https://via.placeholder.com/150?text=Vinyl")';
+            }
+        }
+        
+        // Update streaming service links
+        this._updateStreamingLinks(song);
+        
+        // Update artist social links
+        this._updateArtistSocialLinks(song);
+        
+        // Update song navigation list
+        this._updateSongNavigation();
+        
+        // Update buy button
+        const buyButton = this._shadow.querySelector('.buy-now-btn');
+        if (buyButton) {
+            if (song.purchaseLink) {
+                buyButton.style.display = 'block';
+            } else {
+                buyButton.style.display = 'none';
+            }
+        }
+        
+        // Load audio if available
+        if (this._audioElement && song.audioFile) {
+            console.log("Loading audio:", song.audioFile);
+            this._loadSong(song.audioFile);
+        } else {
+            console.warn("Audio element not initialized or no audio file available");
+        }
+    }
 }
 
 // Register the custom element
