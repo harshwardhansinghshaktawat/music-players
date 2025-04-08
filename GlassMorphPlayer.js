@@ -1024,7 +1024,7 @@ class GlassMorphPlayer extends HTMLElement {
                 
                 <!-- Player Header -->
                 <div class="player-header">
-                    <h1 class="player-title">Glass Audio</h1>
+                    <h1 class="player-title">Music Player</h1>
                     
                     <div class="theme-selector">
     <div class="theme-option theme-ultraviolet active" data-theme="default" title="Ultraviolet Theme" tabindex="0"></div>
