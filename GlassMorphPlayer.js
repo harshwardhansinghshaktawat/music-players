@@ -12,92 +12,97 @@ class GlassMorphPlayer extends HTMLElement {
                 
                 /* Default Theme: Aurora */
                 :host {
-                    --glass-bg-primary: rgba(255, 255, 255, 0.1);
-                    --glass-bg-secondary: rgba(255, 255, 255, 0.15);
-                    --glass-border: rgba(255, 255, 255, 0.2);
-                    --glass-shadow: rgba(0, 0, 0, 0.1);
-                    --accent-color: #64DFDF;
-                    --accent-gradient: linear-gradient(135deg, #64DFDF, #6B5CA5);
-                    --text-primary: rgba(255, 255, 255, 0.95);
-                    --text-secondary: rgba(255, 255, 255, 0.7);
-                    --icon-color: rgba(255, 255, 255, 0.8);
-                    --background-gradient: linear-gradient(140deg, #0A2463, #3E92CC, #6C0E9A);
-                    --visualizer-color1: rgba(100, 223, 223, 0.8);
-                    --visualizer-color2: rgba(107, 92, 165, 0.8);
-                    --blur-amount: 10px;
-                    
-                    display: block;
-                    width: 100%;
-                    height: 100%;
-                    font-family: 'Poppins', sans-serif;
-                    color: var(--text-primary);
-                    box-sizing: border-box;
-                    font-size: 16px;
-                }
-                
-                /* Moonlight Theme */
-                :host(.theme-moonlight) {
-                    --glass-bg-primary: rgba(255, 255, 255, 0.08);
-                    --glass-bg-secondary: rgba(255, 255, 255, 0.12);
-                    --glass-border: rgba(255, 255, 255, 0.15);
-                    --glass-shadow: rgba(0, 0, 0, 0.2);
-                    --accent-color: #A0C4FF;
-                    --accent-gradient: linear-gradient(135deg, #A0C4FF, #9D4EDD);
-                    --text-primary: rgba(255, 255, 255, 0.95);
-                    --text-secondary: rgba(255, 255, 255, 0.7);
-                    --icon-color: rgba(255, 255, 255, 0.8);
-                    --background-gradient: linear-gradient(140deg, #0B0C10, #1F2833, #312450);
-                    --visualizer-color1: rgba(160, 196, 255, 0.8);
-                    --visualizer-color2: rgba(157, 78, 221, 0.8);
-                }
-                
-                /* Sakura Theme */
-                :host(.theme-sakura) {
-                    --glass-bg-primary: rgba(255, 255, 255, 0.15);
-                    --glass-bg-secondary: rgba(255, 255, 255, 0.2);
-                    --glass-border: rgba(255, 255, 255, 0.25);
-                    --glass-shadow: rgba(0, 0, 0, 0.1);
-                    --accent-color: #FFAFCC;
-                    --accent-gradient: linear-gradient(135deg, #FFAFCC, #FFC8DD);
-                    --text-primary: rgba(255, 255, 255, 0.95);
-                    --text-secondary: rgba(255, 255, 255, 0.7);
-                    --icon-color: rgba(255, 255, 255, 0.8);
-                    --background-gradient: linear-gradient(140deg, #590D22, #800F2F, #A4133C);
-                    --visualizer-color1: rgba(255, 175, 204, 0.8);
-                    --visualizer-color2: rgba(255, 200, 221, 0.8);
-                }
-                
-                /* Emerald Theme */
-                :host(.theme-emerald) {
-                    --glass-bg-primary: rgba(255, 255, 255, 0.1);
-                    --glass-bg-secondary: rgba(255, 255, 255, 0.15);
-                    --glass-border: rgba(255, 255, 255, 0.2);
-                    --glass-shadow: rgba(0, 0, 0, 0.1);
-                    --accent-color: #52B788;
-                    --accent-gradient: linear-gradient(135deg, #52B788, #2D6A4F);
-                    --text-primary: rgba(255, 255, 255, 0.95);
-                    --text-secondary: rgba(255, 255, 255, 0.7);
-                    --icon-color: rgba(255, 255, 255, 0.8);
-                    --background-gradient: linear-gradient(140deg, #081C15, #1B4332, #2D6A4F);
-                    --visualizer-color1: rgba(82, 183, 136, 0.8);
-                    --visualizer-color2: rgba(45, 106, 79, 0.8);
-                }
-                
-                /* Sunset Theme */
-                :host(.theme-sunset) {
-                    --glass-bg-primary: rgba(255, 255, 255, 0.1);
-                    --glass-bg-secondary: rgba(255, 255, 255, 0.15);
-                    --glass-border: rgba(255, 255, 255, 0.2);
-                    --glass-shadow: rgba(0, 0, 0, 0.1);
-                    --accent-color: #F9C74F;
-                    --accent-gradient: linear-gradient(135deg, #F9C74F, #F3722C);
-                    --text-primary: rgba(255, 255, 255, 0.95);
-                    --text-secondary: rgba(255, 255, 255, 0.7);
-                    --icon-color: rgba(255, 255, 255, 0.8);
-                    --background-gradient: linear-gradient(140deg, #582F0E, #7F4F24, #936639);
-                    --visualizer-color1: rgba(249, 199, 79, 0.8);
-                    --visualizer-color2: rgba(243, 114, 44, 0.8);
-                }
+    --glass-bg-primary: rgba(255, 255, 255, 0.1);
+    --glass-bg-secondary: rgba(255, 255, 255, 0.15);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-shadow: rgba(0, 0, 0, 0.1);
+    --accent-color: #C874D9;
+    --accent-gradient: linear-gradient(135deg, #8A2BE2, #C874D9);
+    --bg-gradient: linear-gradient(135deg, #2E0854, #5B0060, #8A2BE2);
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --icon-color: rgba(255, 255, 255, 0.8);
+    --visualizer-color1: rgba(195, 120, 217, 0.7);
+    --visualizer-color2: rgba(138, 43, 226, 0.7);
+    --visualizer-accent: rgba(230, 180, 255, 0.9);
+    --blur-amount: 10px;
+    
+    display: block;
+    width: 100%;
+    height: 100%;
+    font-family: 'Poppins', sans-serif;
+    color: var(--text-primary);
+    box-sizing: border-box;
+    font-size: 16px;
+}
+
+/* Neo Mint Theme */
+:host(.theme-neo-mint) {
+    --glass-bg-primary: rgba(255, 255, 255, 0.08);
+    --glass-bg-secondary: rgba(255, 255, 255, 0.12);
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --glass-shadow: rgba(0, 0, 0, 0.15);
+    --accent-color: #00E6C3;
+    --accent-gradient: linear-gradient(135deg, #00E6C3, #01C4E7);
+    --bg-gradient: linear-gradient(135deg, #004E5F, #007D69, #00B894);
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --icon-color: rgba(255, 255, 255, 0.8);
+    --visualizer-color1: rgba(0, 230, 195, 0.7);
+    --visualizer-color2: rgba(1, 196, 231, 0.7);
+    --visualizer-accent: rgba(180, 255, 240, 0.9);
+}
+
+/* Rose Quartz Theme */
+:host(.theme-rose-quartz) {
+    --glass-bg-primary: rgba(255, 255, 255, 0.15);
+    --glass-bg-secondary: rgba(255, 255, 255, 0.2);
+    --glass-border: rgba(255, 255, 255, 0.25);
+    --glass-shadow: rgba(0, 0, 0, 0.1);
+    --accent-color: #FF9999;
+    --accent-gradient: linear-gradient(135deg, #FF9999, #FF6B8B);
+    --bg-gradient: linear-gradient(135deg, #96545E, #C06C84, #F67280);
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --icon-color: rgba(255, 255, 255, 0.8);
+    --visualizer-color1: rgba(255, 153, 153, 0.7);
+    --visualizer-color2: rgba(255, 107, 139, 0.7);
+    --visualizer-accent: rgba(255, 220, 220, 0.9);
+}
+
+/* Electric Blue Theme */
+:host(.theme-electric-blue) {
+    --glass-bg-primary: rgba(255, 255, 255, 0.1);
+    --glass-bg-secondary: rgba(255, 255, 255, 0.15);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-shadow: rgba(0, 0, 0, 0.1);
+    --accent-color: #2196F3;
+    --accent-gradient: linear-gradient(135deg, #2196F3, #00C9FF);
+    --bg-gradient: linear-gradient(135deg, #1A237E, #0D47A1, #2979FF);
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --icon-color: rgba(255, 255, 255, 0.8);
+    --visualizer-color1: rgba(33, 150, 243, 0.7);
+    --visualizer-color2: rgba(0, 201, 255, 0.7);
+    --visualizer-accent: rgba(180, 230, 255, 0.9);
+}
+
+/* Sunset Coral Theme */
+:host(.theme-sunset-coral) {
+    --glass-bg-primary: rgba(255, 255, 255, 0.1);
+    --glass-bg-secondary: rgba(255, 255, 255, 0.15);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-shadow: rgba(0, 0, 0, 0.1);
+    --accent-color: #FF6B6B;
+    --accent-gradient: linear-gradient(135deg, #FF6B6B, #FFD166);
+    --bg-gradient: linear-gradient(135deg, #7D2A2A, #B83B5E, #FF6B6B);
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --icon-color: rgba(255, 255, 255, 0.8);
+    --visualizer-color1: rgba(255, 107, 107, 0.7);
+    --visualizer-color2: rgba(255, 209, 102, 0.7);
+    --visualizer-accent: rgba(255, 220, 180, 0.9);
+}
                 
                 *, *::before, *::after {
                     box-sizing: inherit;
@@ -106,15 +111,15 @@ class GlassMorphPlayer extends HTMLElement {
                 }
                 
                 .glass-container {
-                    width: 100%;
-                    height: 100%;
-                    background: var(--background-gradient);
-                    border-radius: 18px;
-                    overflow: hidden;
-                    display: flex;
-                    flex-direction: column;
-                    position: relative;
-                }
+    width: 100%;
+    height: 100%;
+    background: var(--bg-gradient);
+    border-radius: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
                 
                 /* Glassmorphism common styles */
                 .glass-panel {
@@ -229,25 +234,25 @@ class GlassMorphPlayer extends HTMLElement {
                     box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
                 }
                 
-                .theme-aurora {
-                    background: linear-gradient(135deg, #64DFDF, #6B5CA5);
-                }
-                
-                .theme-moonlight {
-                    background: linear-gradient(135deg, #A0C4FF, #9D4EDD);
-                }
-                
-                .theme-sakura {
-                    background: linear-gradient(135deg, #FFAFCC, #FFC8DD);
-                }
-                
-                .theme-emerald {
-                    background: linear-gradient(135deg, #52B788, #2D6A4F);
-                }
-                
-                .theme-sunset {
-                    background: linear-gradient(135deg, #F9C74F, #F3722C);
-                }
+                .theme-ultraviolet {
+    background: linear-gradient(135deg, #8A2BE2, #C874D9);
+}
+
+.theme-neo-mint {
+    background: linear-gradient(135deg, #00E6C3, #01C4E7);
+}
+
+.theme-rose-quartz {
+    background: linear-gradient(135deg, #FF9999, #FF6B8B);
+}
+
+.theme-electric-blue {
+    background: linear-gradient(135deg, #2196F3, #00C9FF);
+}
+
+.theme-sunset-coral {
+    background: linear-gradient(135deg, #FF6B6B, #FFD166);
+}
                 
                 /* Main layout */
                 .player-main {
@@ -451,17 +456,17 @@ class GlassMorphPlayer extends HTMLElement {
                 
                 /* Circle visualizer container */
                 .visualizer-container {
-                    aspect-ratio: 2 / 1;
-                    width: 100%;
-                    background: var(--glass-bg-secondary);
-                    backdrop-filter: blur(var(--blur-amount));
-                    -webkit-backdrop-filter: blur(var(--blur-amount));
-                    border: 1px solid var(--glass-border);
-                    border-radius: 16px;
-                    overflow: hidden;
-                    position: relative;
-                    box-shadow: 0 5px 15px var(--glass-shadow);
-                }
+    aspect-ratio: 2 / 1;
+    width: 100%;
+    background: var(--glass-bg-secondary);
+    backdrop-filter: blur(var(--blur-amount));
+    -webkit-backdrop-filter: blur(var(--blur-amount));
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 5px 15px var(--glass-shadow);
+}
                 
                 .audio-visualizer {
                     width: 100%;
@@ -1022,12 +1027,12 @@ class GlassMorphPlayer extends HTMLElement {
                     <h1 class="player-title">Glass Audio</h1>
                     
                     <div class="theme-selector">
-                        <div class="theme-option theme-aurora active" data-theme="default" title="Aurora Theme" tabindex="0"></div>
-                        <div class="theme-option theme-moonlight" data-theme="moonlight" title="Moonlight Theme" tabindex="0"></div>
-                        <div class="theme-option theme-sakura" data-theme="sakura" title="Sakura Theme" tabindex="0"></div>
-                        <div class="theme-option theme-emerald" data-theme="emerald" title="Emerald Theme" tabindex="0"></div>
-                        <div class="theme-option theme-sunset" data-theme="sunset" title="Sunset Theme" tabindex="0"></div>
-                    </div>
+    <div class="theme-option theme-ultraviolet active" data-theme="default" title="Ultraviolet Theme" tabindex="0"></div>
+    <div class="theme-option theme-neo-mint" data-theme="neo-mint" title="Neo Mint Theme" tabindex="0"></div>
+    <div class="theme-option theme-rose-quartz" data-theme="rose-quartz" title="Rose Quartz Theme" tabindex="0"></div>
+    <div class="theme-option theme-electric-blue" data-theme="electric-blue" title="Electric Blue Theme" tabindex="0"></div>
+    <div class="theme-option theme-sunset-coral" data-theme="sunset-coral" title="Sunset Coral Theme" tabindex="0"></div>
+</div>
                 </div>
                 
                 <!-- Main Player Layout -->
@@ -1448,223 +1453,192 @@ return new Promise((resolve, reject) => {
     }
     
     _drawVisualization() {
-        if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
+    if (!this._isPlaying || !this._analyser || !this._canvasCtx) return;
+    
+    this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+    
+    // Get frequency data
+    this._analyser.getByteFrequencyData(this._dataArray);
+    
+    const canvas = this._canvas;
+    const ctx = this._canvasCtx;
+    
+    // Clear canvas with a transparent background that matches the glass effect
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // To achieve a true glassmorphism effect, we'll use a semi-transparent gradient that
+    // matches our theme colors rather than clearing with black
+    const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    bgGradient.addColorStop(0, 'rgba(255, 255, 255, 0.01)');
+    bgGradient.addColorStop(1, 'rgba(255, 255, 255, 0.03)');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Get colors from CSS variables
+    const primaryColor = getComputedStyle(this).getPropertyValue('--visualizer-color1').trim();
+    const secondaryColor = getComputedStyle(this).getPropertyValue('--visualizer-color2').trim();
+    const accentColor = getComputedStyle(this).getPropertyValue('--visualizer-accent').trim();
+    
+    // Create a wave effect visualizer that fits glassmorphism aesthetic
+    // We'll create a smooth wave that reacts to the music
+    const sliceWidth = canvas.width / this._dataArray.length;
+    const centerY = canvas.height / 2;
+    
+    // Calculate wave points with smooth transitions
+    if (!this._prevWavePoints) {
+        this._prevWavePoints = new Array(this._dataArray.length).fill(centerY);
+    }
+    
+    // Apply smoothing factor to transitions
+    const smoothingFactor = 0.3;
+    
+    // Draw main wave
+    this._drawWave(ctx, primaryColor, sliceWidth, centerY, smoothingFactor, 0.7);
+    
+    // Draw second wave (offset and with different color)
+    this._drawWave(ctx, secondaryColor, sliceWidth, centerY, smoothingFactor, 0.5, 10);
+    
+    // Add flowing particles along the wave for extra effect
+    this._drawFlowingParticles(ctx, accentColor);
+    
+    // Add subtle reflections
+    this._drawReflections(ctx);
+}
+
+// Helper method to draw wave
+_drawWave(ctx, color, sliceWidth, centerY, smoothingFactor, alpha, yOffset = 0) {
+    const canvas = this._canvas;
+    
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    
+    for (let i = 0; i < this._dataArray.length; i++) {
+        // Get normalized value (0 to 1)
+        const value = this._dataArray[i] / 255.0;
         
-        this._animationId = requestAnimationFrame(this._drawVisualization.bind(this));
+        // Calculate wave height with smoothing
+        const waveHeight = value * canvas.height * 0.4; // Limit height to 40% of canvas
+        const targetY = centerY - waveHeight + yOffset;
         
-        // Get frequency data
-        this._analyser.getByteFrequencyData(this._dataArray);
+        // Apply smoothing
+        if (!this._prevWavePoints[i]) this._prevWavePoints[i] = centerY;
+        this._prevWavePoints[i] = this._prevWavePoints[i] * (1 - smoothingFactor) + targetY * smoothingFactor;
         
-        const canvas = this._canvas;
-        const ctx = this._canvasCtx;
+        const x = i * sliceWidth;
+        const y = this._prevWavePoints[i];
         
-        // Clear canvas with a semi-transparent color for trailing effect
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Use quadratic curves for smoother waves
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            const prevX = (i - 1) * sliceWidth;
+            const prevY = this._prevWavePoints[i - 1];
+            const cpX = (x + prevX) / 2;
+            const cpY = (y + prevY) / 2;
+            
+            ctx.quadraticCurveTo(cpX, cpY, x, y);
+        }
+    }
+    
+    // Complete the wave by drawing to the bottom corners
+    ctx.lineTo(canvas.width, centerY);
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.lineTo(0, canvas.height);
+    ctx.closePath();
+    
+    // Create gradient fill for wave
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    
+    ctx.fillStyle = gradient;
+    ctx.globalAlpha = alpha;
+    ctx.fill();
+    
+    // Add glow to the wave
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.stroke();
+    
+    // Reset global alpha
+    ctx.globalAlpha = 1;
+}
+
+// Add flowing particles that move along the wave
+_drawFlowingParticles(ctx, color) {
+    // Initialize particles if they don't exist
+    if (!this._particles) {
+        this._particles = [];
+        this._createParticles(30);
+    }
+    
+    // Update and draw particles
+    const canvas = this._canvas;
+    
+    for (let i = 0; i < this._particles.length; i++) {
+        const p = this._particles[i];
         
-        // Calculate center of the canvas
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
+        // Update position
+        p.x += p.speed;
         
-        // Get colors from CSS variables for the circular gradient
-        const color1 = getComputedStyle(this).getPropertyValue('--visualizer-color1').trim();
-        const color2 = getComputedStyle(this).getPropertyValue('--visualizer-color2').trim();
-        
-        // Draw circular visualization
-        const maxRadius = Math.min(centerX, centerY) * 0.9;
-        const barCount = 100; // Number of lines to draw
-        const angleStep = (Math.PI * 2) / barCount;
-        
-        // Create radial gradient
-        const gradient = ctx.createRadialGradient(
-            centerX, centerY, 0,
-            centerX, centerY, maxRadius
-        );
-        gradient.addColorStop(0, color1);
-        gradient.addColorStop(1, color2);
-        
-        // Initialize the particle system if it doesn't exist
-        if (!this._particles) {
-            this._particles = [];
-            this._createParticles(50); // Create 50 particles
+        // If particle goes off-screen, reset it
+        if (p.x > canvas.width) {
+            p.x = 0;
+            p.y = canvas.height * Math.random() * 0.7 + canvas.height * 0.15;
+            p.size = Math.random() * 3 + 1;
+            p.speed = Math.random() * 1 + 0.5;
+            p.opacity = Math.random() * 0.7 + 0.3;
         }
         
-        // Update and draw particles first (behind the main visualization)
-        this._updateParticles();
+        // Get the intensity of audio at this x-position
+        const dataIndex = Math.floor((p.x / canvas.width) * this._dataArray.length);
+        const intensity = this._dataArray[dataIndex] / 255;
         
-        // Draw the circular audio visualization
-        const smoothing = 0.8; // Smoothing factor
+        // Make particles react to the audio
+        const yOffset = intensity * 30;
         
-        if (!this._prevRadiusValues) {
-            this._prevRadiusValues = new Array(barCount).fill(0);
-        }
-        
+        // Draw particle
         ctx.beginPath();
-        for (let i = 0; i < barCount; i++) {
-            const angle = i * angleStep;
-            
-            // Get frequency value for this angle, map it to radius
-            const index = Math.floor(i * this._dataArray.length / barCount);
-            let value = this._dataArray[index];
-            
-            // Apply smoothing
-            let radius = (value / 255) * maxRadius;
-            radius = this._prevRadiusValues[i] * smoothing + radius * (1 - smoothing);
-            this._prevRadiusValues[i] = radius;
-            
-            // Calculate position
-            const x = centerX + Math.cos(angle) * radius;
-            const y = centerY + Math.sin(angle) * radius;
-            
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-        }
-        
-        // Close the path to form a complete shape
-        ctx.closePath();
-        
-        // Fill with gradient
-        ctx.fillStyle = gradient;
-        ctx.globalAlpha = 0.7;
+        ctx.arc(p.x, p.y - yOffset, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = p.opacity * (intensity + 0.2);
         ctx.fill();
-        
-        // Add a glow effect
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = color1;
-        ctx.stroke();
-        
-        // Reset shadow and alpha
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 1;
-        
-        // Draw a pulsating inner circle
-        this._drawPulsatingCircle(ctx, centerX, centerY, maxRadius * 0.2);
     }
     
-    _createParticles(count) {
-        const canvas = this._canvas;
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        
-        for (let i = 0; i < count; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const distance = Math.random() * canvas.width / 3;
-            
-            this._particles.push({
-                x: centerX + Math.cos(angle) * distance,
-                y: centerY + Math.sin(angle) * distance,
-                size: Math.random() * 3 + 1,
-                speedX: (Math.random() - 0.5) * 0.8,
-                speedY: (Math.random() - 0.5) * 0.8,
-                opacity: Math.random() * 0.5 + 0.2,
-                color: Math.random() > 0.5 ? 
-                    getComputedStyle(this).getPropertyValue('--visualizer-color1').trim() : 
-                    getComputedStyle(this).getPropertyValue('--visualizer-color2').trim()
-            });
-        }
-    }
+    // Reset alpha
+    ctx.globalAlpha = 1;
+}
+
+// Create flowing particles
+_createParticles(count) {
+    const canvas = this._canvas;
     
-    _updateParticles() {
-        const canvas = this._canvas;
-        const ctx = this._canvasCtx;
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        
-        // Update and draw particles
-        for (let i = 0; i < this._particles.length; i++) {
-            const p = this._particles[i];
-            
-            // Update position
-            p.x += p.speedX;
-            p.y += p.speedY;
-            
-            // Attract particles toward center based on audio
-            const dx = centerX - p.x;
-            const dy = centerY - p.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            // Get audio intensity (average of a few frequency bins)
-            let intensity = 0;
-            for (let j = 0; j < 5; j++) {
-                intensity += this._dataArray[j * 10] / 255;
-            }
-            intensity /= 5;
-            
-            // Apply gravitational force toward center based on audio
-            const force = intensity * 0.02;
-            
-            if (dist > 5) { // Don't apply force if too close to center
-                p.speedX += (dx / dist) * force;
-                p.speedY += (dy / dist) * force;
-            }
-            
-            // Apply damping to prevent particles from moving too fast
-            p.speedX *= 0.98;
-            p.speedY *= 0.98;
-            
-            // Draw particle
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fillStyle = p.color;
-            ctx.globalAlpha = p.opacity * (intensity + 0.5); // Make opacity audio reactive
-            ctx.fill();
-            
-            // Reset particles that get too far from the center
-            if (dist > canvas.width / 1.5) {
-                const angle = Math.random() * Math.PI * 2;
-                const newDist = Math.random() * canvas.width / 4;
-                p.x = centerX + Math.cos(angle) * newDist;
-                p.y = centerY + Math.sin(angle) * newDist;
-                p.speedX = (Math.random() - 0.5) * 0.8;
-                p.speedY = (Math.random() - 0.5) * 0.8;
-            }
-        }
-        
-        // Reset globalAlpha
-        ctx.globalAlpha = 1;
+    for (let i = 0; i < count; i++) {
+        this._particles.push({
+            x: Math.random() * canvas.width,
+            y: canvas.height * Math.random() * 0.7 + canvas.height * 0.15,
+            size: Math.random() * 3 + 1,
+            speed: Math.random() * 1 + 0.5,
+            opacity: Math.random() * 0.7 + 0.3
+        });
     }
+}
+
+// Add subtle reflections for glass effect
+_drawReflections(ctx) {
+    const canvas = this._canvas;
     
-    _drawPulsatingCircle(ctx, centerX, centerY, baseRadius) {
-        // Calculate pulsating radius based on time
-        if (!this._pulseStartTime) {
-            this._pulseStartTime = Date.now();
-        }
-        
-        const elapsed = Date.now() - this._pulseStartTime;
-        const pulseFactor = Math.sin(elapsed / 400) * 0.15 + 1; // Oscillate between 0.85 and 1.15
-        const radius = baseRadius * pulseFactor;
-        
-        // Get colors from CSS variables
-        const color1 = getComputedStyle(this).getPropertyValue('--visualizer-color1').trim();
-        const color2 = getComputedStyle(this).getPropertyValue('--visualizer-color2').trim();
-        
-        // Create gradient for inner circle
-        const gradient = ctx.createRadialGradient(
-            centerX, centerY, 0,
-            centerX, centerY, radius
-        );
-        gradient.addColorStop(0, color1);
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0.2)');
-        
-        // Draw inner circle
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-        ctx.fillStyle = gradient;
-        ctx.fill();
-        
-        // Add glow
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = color2;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Reset shadow
-        ctx.shadowBlur = 0;
-    }
+    // Draw subtle light reflection
+    const reflection = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    reflection.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    reflection.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
+    reflection.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    
+    ctx.fillStyle = reflection;
+    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.3);
+}
+
 
     _setupEventListeners() {
         // Artwork play button
@@ -1865,19 +1839,19 @@ return new Promise((resolve, reject) => {
     }
     
     _changeTheme(theme) {
-        // Remove all theme classes
-        this.classList.remove(
-            'theme-moonlight',
-            'theme-sakura',
-            'theme-emerald',
-            'theme-sunset'
-        );
-        
-        // Add selected theme class
-        if (theme !== 'default') {
-            this.classList.add(`theme-${theme}`);
-        }
+    // Remove all theme classes
+    this.classList.remove(
+        'theme-neo-mint',
+        'theme-rose-quartz',
+        'theme-electric-blue',
+        'theme-sunset-coral'
+    );
+    
+    // Add selected theme class
+    if (theme !== 'default') {
+        this.classList.add(`theme-${theme}`);
     }
+}
 
     connectedCallback() {
         if (this._playerData) {
