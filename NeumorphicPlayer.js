@@ -238,12 +238,15 @@ class NeumorphicPlayer extends HTMLElement {
                                 -8px -8px 16px var(--shadow-light);
                 }
                 
+                /* MODIFIED: Fixed the artwork disk to ensure it's always round */
                 .artwork-disk {
                     position: absolute;
-                    top: 10%;
-                    left: 10%;
+                    top: 50%;
+                    left: 50%;
                     width: 80%;
-                    height: 80%;
+                    height: 0;
+                    padding-bottom: 80%; /* Maintain aspect ratio */
+                    transform: translate(-50%, -50%);
                     border-radius: 50%;
                     background: var(--background-dark);
                     display: flex;
@@ -253,6 +256,7 @@ class NeumorphicPlayer extends HTMLElement {
                                 -8px -8px 16px var(--shadow-light);
                     z-index: 1;
                     transition: transform 0.5s ease;
+                    overflow: hidden; /* Keep the image inside the disc */
                 }
                 
                 .artwork-disk.spinning {
@@ -260,13 +264,29 @@ class NeumorphicPlayer extends HTMLElement {
                 }
                 
                 @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
+                    0% { transform: translate(-50%, -50%) rotate(0deg); }
+                    100% { transform: translate(-50%, -50%) rotate(360deg); }
+                }
+                
+                /* MODIFIED: Added album cover inside the disc */
+                .artwork-disk-cover {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    border-radius: 50%;
+                    z-index: 0;
                 }
                 
                 .artwork-disk-inner {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
                     width: 40%;
                     height: 40%;
+                    transform: translate(-50%, -50%);
                     border-radius: 50%;
                     background: var(--background-light);
                     box-shadow: inset 3px 3px 6px var(--shadow-dark), 
@@ -274,15 +294,17 @@ class NeumorphicPlayer extends HTMLElement {
                     display: flex;
                     justify-content: center;
                     align-items: center;
+                    z-index: 1;
                 }
                 
                 .artwork-disk-center {
-                    width: 20%;
-                    height: 20%;
+                    width: 50%;
+                    height: 50%;
                     border-radius: 50%;
                     background: var(--primary);
                 }
                 
+                /* Background image behind the disc (box shape) */
                 .artwork-image {
                     position: absolute;
                     top: 0;
@@ -987,8 +1009,10 @@ class NeumorphicPlayer extends HTMLElement {
                         <div class="artwork-container">
                             <img class="artwork-image" src="" alt="Album Cover">
                             
-                            <!-- Spinning disc effect -->
+                            <!-- Spinning disc effect (MODIFIED) -->
                             <div class="artwork-disk">
+                                <!-- Added album cover inside the disc -->
+                                <img class="artwork-disk-cover" src="" alt="Album Cover">
                                 <div class="artwork-disk-inner">
                                     <div class="artwork-disk-center"></div>
                                 </div>
@@ -1168,6 +1192,9 @@ class NeumorphicPlayer extends HTMLElement {
         // Load WaveSurfer.js dynamically
         this._loadWaveSurferScript().then(() => {
             this._initializeWaveSurfer();
+            
+            // ADDED: Preload audio durations for all songs
+            this._preloadTrackDurations();
         });
         
         // Set up event listeners
@@ -1175,6 +1202,55 @@ class NeumorphicPlayer extends HTMLElement {
         
         // Handle resize events
         this._setupResizeListener();
+        
+        // ADDED: Track durations map to store duration information for all tracks
+        this._trackDurations = new Map();
+    }
+    
+    // ADDED: New method to preload durations for all tracks
+    _preloadTrackDurations() {
+        if (!this._playerData || !this._playerData.songs) return;
+        
+        // Create a map to store durations
+        this._trackDurations = new Map();
+        
+        // Create temporary audio elements to load durations
+        this._playerData.songs.forEach((song, index) => {
+            if (!song.audioFile) return;
+            
+            // MODIFIED: Skip if song already has valid duration
+            if (song.duration && song.duration !== '0:00') {
+                this._trackDurations.set(index, song.duration);
+                return;
+            }
+            
+            // Create a temporary audio element to get the duration
+            const tempAudio = new Audio();
+            tempAudio.preload = 'metadata';
+            
+            // When metadata is loaded, update duration
+            tempAudio.addEventListener('loadedmetadata', () => {
+                const duration = this._formatTime(tempAudio.duration);
+                this._trackDurations.set(index, duration);
+                
+                // Update the song in player data
+                this._playerData.songs[index].duration = duration;
+                
+                // Update display if playlist has been rendered
+                this._updateTrackDurationDisplay(index, duration);
+            });
+            
+            // Load the audio file to fetch metadata
+            tempAudio.src = song.audioFile;
+        });
+    }
+    
+    // ADDED: Helper method to update a specific track's duration display
+    _updateTrackDurationDisplay(index, duration) {
+        const trackItem = this._shadow.querySelector(`.track-item:nth-child(${index + 1}) .track-duration`);
+        if (trackItem) {
+            trackItem.textContent = duration;
+        }
     }
     
     _setupResizeListener() {
@@ -1240,6 +1316,9 @@ class NeumorphicPlayer extends HTMLElement {
                         this._loadSong(currentSong.audioFile);
                     }
                 }
+                
+                // ADDED: Preload track durations
+                this._preloadTrackDurations();
             } catch (e) {
                 console.error("Error parsing player data:", e);
             }
@@ -1247,7 +1326,7 @@ class NeumorphicPlayer extends HTMLElement {
     }
     
     _loadWaveSurferScript() {
-return new Promise((resolve, reject) => {
+        return new Promise((resolve, reject) => {
             if (window.WaveSurfer) {
                 resolve();
                 return;
@@ -1314,12 +1393,16 @@ return new Promise((resolve, reject) => {
             this._stopVisualization();
         });
         
+        // MODIFIED: Fixed the ended event to properly advance to next song
         this._audioElement.addEventListener('ended', () => {
+            console.log("Song ended, advancing to next track");
             this._setPlayingState(false);
             this._stopVisualization();
             
             // Auto play next if not in repeat mode
             if (!this._isRepeat) {
+                // Need to maintain playing state before changing song
+                this._isPlaying = true; // Set this flag to ensure auto-play works
                 this._changeSong(1);
             } else {
                 // For repeat mode, play the same song again
@@ -1781,15 +1864,24 @@ return new Promise((resolve, reject) => {
             }
         }
         
-        // Set artwork image
+        // Set artwork image (both background and inside the disc)
         const artworkImage = this._shadow.querySelector('.artwork-image');
-        if (artworkImage) {
+        const artworkDiskCover = this._shadow.querySelector('.artwork-disk-cover');
+        
+        if (artworkImage && artworkDiskCover) {
             if (song.coverImage) {
                 artworkImage.src = song.coverImage;
                 artworkImage.alt = `Cover for ${song.title} by ${song.artist}`;
+                
+                // ADDED: Set the same image for the disc cover
+                artworkDiskCover.src = song.coverImage;
+                artworkDiskCover.alt = `Cover for ${song.title} by ${song.artist}`;
             } else {
-                artworkImage.src = 'https://via.placeholder.com/500?text=Soft+Music';
+                const defaultCover = 'https://via.placeholder.com/500?text=Soft+Music';
+                artworkImage.src = defaultCover;
                 artworkImage.alt = 'Default album cover';
+                artworkDiskCover.src = defaultCover;
+                artworkDiskCover.alt = 'Default album cover';
             }
         }
         
@@ -1815,8 +1907,13 @@ return new Promise((resolve, reject) => {
         
         // Load audio if available
         if (this._audioElement && song.audioFile) {
-            console.log("Loading audio:", song.audioFile); // For debugging
+            console.log("Loading audio:", song.audioFile);
             this._loadSong(song.audioFile);
+            
+            // If we were playing before changing song, continue playing
+            if (this._isPlaying) {
+                this._audioElement.play();
+            }
         } else {
             console.warn("Audio element not initialized or no audio file available");
         }
@@ -1839,10 +1936,16 @@ return new Promise((resolve, reject) => {
             trackItem.setAttribute('role', 'button');
             trackItem.setAttribute('aria-label', `Play ${song.title} by ${song.artist}`);
             
-            // Estimate duration from audio if not provided
-            let duration = song.duration || '0:00';
-            if (isActive && this._audioElement && this._audioElement.duration) {
-                duration = this._formatTime(this._audioElement.duration);
+            // Get track duration from either:
+            // 1. The cached durations map
+            // 2. The song data
+            // 3. Default to "0:00" if neither is available
+            let duration = '0:00';
+            
+            if (this._trackDurations && this._trackDurations.has(index)) {
+                duration = this._trackDurations.get(index);
+            } else if (song.duration && song.duration !== '0:00') {
+                duration = song.duration;
             }
             
             trackItem.innerHTML = `
@@ -2027,8 +2130,19 @@ return new Promise((resolve, reject) => {
         if (!isNaN(duration) && totalTimeElement) {
             totalTimeElement.textContent = this._formatTime(duration);
             
-            // Update the current track's duration in the playlist
-            this._updateCurrentTrackDuration(this._formatTime(duration));
+            // Update the duration in the track durations map
+            if (this._playerData && typeof this._playerData.currentIndex !== 'undefined') {
+                const formattedDuration = this._formatTime(duration);
+                this._trackDurations.set(this._playerData.currentIndex, formattedDuration);
+                
+                // Update the song's duration in the player data
+                if (this._playerData.songs && this._playerData.songs[this._playerData.currentIndex]) {
+                    this._playerData.songs[this._playerData.currentIndex].duration = formattedDuration;
+                }
+                
+                // Update the current track's duration in the playlist
+                this._updateTrackDurationDisplay(this._playerData.currentIndex, formattedDuration);
+            }
             
             // Initialize ARIA values
             const progressBar = this._shadow.querySelector('.progress-bar');
@@ -2036,16 +2150,6 @@ return new Promise((resolve, reject) => {
                 progressBar.setAttribute('aria-valuemin', '0');
                 progressBar.setAttribute('aria-valuemax', '100');
                 progressBar.setAttribute('aria-valuenow', '0');
-            }
-        }
-    }
-    
-    _updateCurrentTrackDuration(duration) {
-        // Update the duration display in the playlist for the current track
-        if (this._playerData && typeof this._playerData.currentIndex !== 'undefined') {
-            const currentTrackItem = this._shadow.querySelector(`.track-item:nth-child(${this._playerData.currentIndex + 1}) .track-duration`);
-            if (currentTrackItem) {
-                currentTrackItem.textContent = duration;
             }
         }
     }
