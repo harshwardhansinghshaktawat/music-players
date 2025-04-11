@@ -367,6 +367,18 @@ class ChillBeatsPlayer extends HTMLElement {
                     transition: transform 2s linear;
                 }
                 
+                /* Add visible markers to the reels to make rotation more visible */
+                .cassette-reel::before {
+                    content: '';
+                    position: absolute;
+                    top: 5px;
+                    left: 50%;
+                    width: 2px;
+                    height: 16px;
+                    background: rgba(0, 0, 0, 0.6);
+                    transform: translateX(-50%);
+                }
+                
                 .cassette-reel::after {
                     content: '';
                     position: absolute;
@@ -1323,7 +1335,7 @@ class ChillBeatsPlayer extends HTMLElement {
                                     </button>
                                     <button class="share-button share-email" title="Share via Email">
                                         <svg viewBox="0 0 24 24">
-                                            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                                           <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
                                         </svg>
                                     </button>
                                     <button class="share-button" title="Copy Link">
@@ -1493,16 +1505,29 @@ return new Promise((resolve, reject) => {
         });
         
         this._audioElement.addEventListener('ended', () => {
-            this._setPlayingState(false);
+            // Fix 1: Don't set playing state to false until we've determined if we should autoplay the next track
+            // This prevents a brief flicker in the UI between songs
             this._stopVisualization();
             
             // Auto play next if not in repeat mode
             if (!this._isRepeat) {
-                this._changeSong(1);
+                this._changeSong(1); // Change to next song
+                
+                // Fix 1: Auto-play the next song immediately
+                if (this._audioElement) {
+                    this._audioElement.play().catch(err => {
+                        console.error("Auto-play failed:", err);
+                        // If autoplay fails (e.g., browser policy), at least update UI
+                        this._setPlayingState(false);
+                    });
+                }
             } else {
                 // For repeat mode, play the same song again
                 this._audioElement.currentTime = 0;
-                this._audioElement.play();
+                this._audioElement.play().catch(err => {
+                    console.error("Auto-play failed on repeat:", err);
+                    this._setPlayingState(false);
+                });
             }
         });
         
@@ -2038,9 +2063,11 @@ return new Promise((resolve, reject) => {
         this._playerData.currentIndex = newIndex;
         this.render();
         
-        // Always auto-play the new song if the previous one was playing
+        // Fix 1 (continued): Always auto-play the new song if the previous one was playing
         if (wasPlaying && this._audioElement) {
-            this._audioElement.play();
+            this._audioElement.play().catch(err => {
+                console.error("Auto-play failed after changing song:", err);
+            });
         }
     }
 
@@ -2057,8 +2084,13 @@ return new Promise((resolve, reject) => {
             if (pauseIcon) pauseIcon.style.display = 'block';
             if (idleAnimation) idleAnimation.classList.add('playing');
             
-            // Start cassette reel animation
+            // Fix 2: Start cassette reel animation - ensure we apply this class properly
             cassetteReels.forEach(reel => {
+                // First remove and then add the class to restart animation
+                reel.classList.remove('cassette-reel-spinning');
+                // Force reflow to ensure animation restarts
+                void reel.offsetWidth;
+                // Add the animation class back
                 reel.classList.add('cassette-reel-spinning');
             });
         } else {
@@ -2066,7 +2098,7 @@ return new Promise((resolve, reject) => {
             if (pauseIcon) pauseIcon.style.display = 'none';
             if (idleAnimation) idleAnimation.classList.remove('playing');
             
-            // Stop cassette reel animation
+            // Fix 2: Stop cassette reel animation
             cassetteReels.forEach(reel => {
                 reel.classList.remove('cassette-reel-spinning');
             });
