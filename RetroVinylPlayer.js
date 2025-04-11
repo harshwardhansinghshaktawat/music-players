@@ -82,12 +82,12 @@ class RetroVinylPlayer extends HTMLElement {
                 
                 .vu-meters {
                     display: flex;
-                    gap: 10px;
+                    gap: 15px; /* Increased gap between meters */
                 }
                 
                 .vu-meter {
-                    width: 60px;
-                    height: 30px;
+                    width: 80px; /* Increased from 60px */
+                    height: 40px; /* Increased from 30px */
                     background: #111;
                     border-radius: 5px;
                     position: relative;
@@ -101,11 +101,11 @@ class RetroVinylPlayer extends HTMLElement {
                     bottom: 0;
                     left: 50%;
                     width: 2px;
-                    height: 60%;
+                    height: 70%; /* Increased from 60% */
                     background: #fff;
                     transform-origin: bottom center;
                     transform: translateX(-50%) rotate(-60deg);
-                    transition: transform 0.3s ease;
+                    transition: transform 0.2s ease; /* Faster response */
                 }
                 
                 .vu-meter-scale {
@@ -123,7 +123,7 @@ class RetroVinylPlayer extends HTMLElement {
                     left: 0;
                     width: 100%;
                     text-align: center;
-                    font-size: 8px;
+                    font-size: 10px; /* Increased from 8px */
                     color: #aaa;
                     font-family: 'Roboto Mono', monospace;
                 }
@@ -238,8 +238,8 @@ class RetroVinylPlayer extends HTMLElement {
                 }
                 
                 .record-label {
-                    width: 28%;
-                    height: 28%;
+                    width: 45%; /* Increased from 28% to match vinyl CD proportions */
+                    height: 45%; /* Increased from 28% to match vinyl CD proportions */
                     border-radius: 50%;
                     background-size: cover;
                     background-position: center;
@@ -346,6 +346,7 @@ class RetroVinylPlayer extends HTMLElement {
                 
                 .track-info {
                     flex: 1;
+                    max-width: 75%; /* Limit width to prevent overlap */
                 }
                 
                 .title {
@@ -354,12 +355,18 @@ class RetroVinylPlayer extends HTMLElement {
                     margin: 0 0 10px 0;
                     color: var(--primary-color);
                     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.6);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 
                 .artist {
                     font-size: 1.5rem;
                     margin: 0 0 5px 0;
                     color: var(--text-secondary);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 
                 .album {
@@ -367,6 +374,9 @@ class RetroVinylPlayer extends HTMLElement {
                     margin: 0;
                     color: var(--text-secondary);
                     opacity: 0.8;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 
                 .track-controls {
@@ -375,22 +385,33 @@ class RetroVinylPlayer extends HTMLElement {
                     justify-content: space-between;
                     align-items: center;
                     padding: 0 20px;
+                    min-width: 120px; /* Ensure minimum width */
                 }
                 
                 /* Retro Knobs & Sliders */
                 .volume-knob-container {
                     position: relative;
                     width: 80px;
-                    height: 80px;
+                    height: 100px; /* Increased height to accommodate label */
                     margin-bottom: 10px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+                
+                .knob-labels {
+                    position: relative;
+                    margin-bottom: 10px; /* Space between label and knob */
+                    text-align: center;
+                    font-size: 0.85rem;
+                    color: var(--text-secondary);
+                    width: 100%;
                 }
                 
                 .volume-knob {
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
+                    position: relative; /* Changed from absolute */
+                    width: 80px;
+                    height: 80px;
                     border-radius: 50%;
                     background: 
                         radial-gradient(
@@ -413,16 +434,6 @@ class RetroVinylPlayer extends HTMLElement {
                     background: var(--tertiary-color);
                     transform-origin: bottom center;
                     transform: translate(-50%, -95%) rotate(var(--rotation, 0deg));
-                }
-                
-                .knob-labels {
-                    position: absolute;
-                    top: -25px;
-                    left: 0;
-                    width: 100%;
-                    text-align: center;
-                    font-size: 0.85rem;
-                    color: var(--text-secondary);
                 }
                 
                 /* Main Content Layout */
@@ -932,6 +943,13 @@ class RetroVinylPlayer extends HTMLElement {
                     
                     .track-info-section {
                         flex-direction: column;
+                        align-items: center;
+                    }
+                    
+                    .track-info {
+                        max-width: 100%;
+                        text-align: center;
+                        margin-bottom: 20px;
                     }
                     
                     .title {
@@ -945,6 +963,25 @@ class RetroVinylPlayer extends HTMLElement {
                     .track-controls {
                         flex-direction: row;
                         padding: 15px 0 0 0;
+                        justify-content: center;
+                    }
+                    
+                    .volume-knob-container {
+                        height: auto;
+                        width: auto;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+                    
+                    .knob-labels {
+                        position: static;
+                        margin-bottom: 5px;
+                    }
+                    
+                    .volume-knob {
+                        width: 60px;
+                        height: 60px;
                     }
                     
                     .btn {
@@ -1328,12 +1365,14 @@ class RetroVinylPlayer extends HTMLElement {
         });
         
         this._audioElement.addEventListener('ended', () => {
-            this._setPlayingState(false);
+            // Don't set playing state to false on ended - we'll handle this during the transition
             this._stopVisualization();
             
             // Auto play next if not in repeat mode
             if (!this._isRepeat) {
-                this._changeSong(1);
+                // Store playing state before changing song (will be true since song just ended)
+                const wasPlaying = true;
+                this._changeSong(1, wasPlaying);
             } else {
                 // For repeat mode, play the same song again
                 this._audioElement.currentTime = 0;
@@ -1446,8 +1485,11 @@ class RetroVinylPlayer extends HTMLElement {
             rightSum += dataArray[i + halfLength];
         }
         
-        const leftAvg = leftSum / halfLength / 255;
-        const rightAvg = rightSum / halfLength / 255;
+        // Calculate more dynamic and responsive VU meter values
+        // Apply a non-linear scaling to make meters more responsive
+        // Even with low volumes, we want some movement in the needles
+        const leftAvg = Math.pow(leftSum / halfLength / 255, 0.7); // More responsive curve
+        const rightAvg = Math.pow(rightSum / halfLength / 255, 0.7);
         
         // Update VU meters
         const leftNeedle = this._shadow.querySelector('.vu-meter:first-child .vu-meter-needle');
@@ -1459,7 +1501,7 @@ class RetroVinylPlayer extends HTMLElement {
             leftNeedle.style.transform = `translateX(-50%) rotate(${leftRotation}deg)`;
         }
         
-if (rightNeedle) {
+        if (rightNeedle) {
             const rightRotation = -60 + rightAvg * 120;
             rightNeedle.style.transform = `translateX(-50%) rotate(${rightRotation}deg)`;
         }
@@ -1498,7 +1540,7 @@ if (rightNeedle) {
         const nextBtn = this._shadow.querySelector('.next-btn');
         if (nextBtn) {
             nextBtn.addEventListener('click', () => {
-                this._changeSong(1);
+                this._changeSong(1, this._isPlaying);
             });
         }
 
@@ -1506,7 +1548,7 @@ if (rightNeedle) {
         const prevBtn = this._shadow.querySelector('.prev-btn');
         if (prevBtn) {
             prevBtn.addEventListener('click', () => {
-                this._changeSong(-1);
+                this._changeSong(-1, this._isPlaying);
             });
         }
 
@@ -1675,11 +1717,8 @@ if (rightNeedle) {
         });
     }
 
-    _changeSong(direction) {
+    _changeSong(direction, autoPlay = false) {
         if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) return;
-        
-        // Store current playing state before changing song
-        const wasPlaying = this._isPlaying;
         
         let newIndex;
         
@@ -1703,13 +1742,18 @@ if (rightNeedle) {
         this.render();
         
         // Animate the tonearm movement
-        this._animateTonearm(wasPlaying);
+        this._animateTonearm(autoPlay);
         
-        // Always auto-play the new song if the previous one was playing
-        if (wasPlaying && this._audioElement) {
+        // Auto-play the new song if requested
+        if (autoPlay && this._audioElement) {
             // Small delay to allow tonearm animation
             setTimeout(() => {
-                this._audioElement.play();
+                this._audioElement.play()
+                    .catch(error => {
+                        console.error("Error auto-playing next song:", error);
+                        // If autoplay fails (e.g., due to browser policy), still update UI
+                        this._setPlayingState(false);
+                    });
             }, 500);
         }
     }
@@ -2054,10 +2098,10 @@ if (rightNeedle) {
                     }
                     break;
                 case 'next':
-                    this._changeSong(1);
+                    this._changeSong(1, this._isPlaying);
                     break;
                 case 'previous':
-                    this._changeSong(-1);
+                    this._changeSong(-1, this._isPlaying);
                     break;
                 case 'setVolume':
                     if (data && typeof data.volume === 'number') {
