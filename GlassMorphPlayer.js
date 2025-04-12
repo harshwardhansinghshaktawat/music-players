@@ -1404,12 +1404,13 @@ return new Promise((resolve, reject) => {
         });
         
         this._audioElement.addEventListener('ended', () => {
-            this._setPlayingState(false);
+            // Don't change playing state here as we're going to play the next song
             this._stopVisualization();
             
             // Auto play next if not in repeat mode
             if (!this._isRepeat) {
-                this._changeSong(1);
+                // Use forceAutoplay to ensure the next song plays automatically
+                this._changeSong(1, true);
             } else {
                 // For repeat mode, play the same song again
                 this._audioElement.currentTime = 0;
@@ -2036,11 +2037,11 @@ _drawReflections(ctx) {
         });
     }
 
-    _changeSong(direction) {
+    _changeSong(direction, forceAutoplay = false) {
         if (!this._playerData || !this._playerData.songs || this._playerData.songs.length === 0) return;
         
         // Store current playing state before changing song
-        const wasPlaying = this._isPlaying;
+        const wasPlaying = this._isPlaying || forceAutoplay;
         
         let newIndex;
         
@@ -2060,12 +2061,22 @@ _drawReflections(ctx) {
             if (newIndex >= this._playerData.songs.length) newIndex = 0;
         }
         
+        // Update the current index
         this._playerData.currentIndex = newIndex;
+        
+        // Update the UI with the new song information
         this.render();
         
-        // Always auto-play the new song if the previous one was playing
+        // Auto-play the new song if the previous one was playing or forceAutoplay is true
         if (wasPlaying && this._audioElement) {
-            this._audioElement.play();
+            this._audioElement.play().catch(error => {
+                console.error("Error auto-playing next song:", error);
+                
+                // Show notification for autoplay issues (common in some browsers)
+                if (error.name === 'NotAllowedError') {
+                    this._showNotification('Autoplay blocked by browser. Click play to continue.');
+                }
+            });
         }
     }
 
@@ -2367,7 +2378,7 @@ _drawReflections(ctx) {
         notification.textContent = message;
         
         // Add to DOM
-        document.body.appendChild(notification);
+        this._shadow.appendChild(notification);
         
         // Force reflow to ensure transition works
         notification.offsetHeight;
