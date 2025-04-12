@@ -895,14 +895,17 @@ class CyberPunkPlayer extends HTMLElement {
                     gap: 0.5rem;
                 }
                 
+                /* ENHANCED PROGRESS BAR FOR BETTER VISIBILITY */
                 .progress-bar {
                     width: 100%;
-                    height: 6px;
+                    height: 8px; /* Increased height for better visibility */
                     background: var(--background-medium);
-                    border-radius: 3px;
+                    border-radius: 4px;
                     position: relative;
                     cursor: pointer;
                     overflow: hidden;
+                    border: 1px solid var(--background-light); /* Added border */
+                    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5); /* Added inner shadow */
                 }
                 
                 .progress-current {
@@ -915,6 +918,18 @@ class CyberPunkPlayer extends HTMLElement {
                     border-radius: 3px;
                     transition: width 0.1s linear;
                     box-shadow: 0 0 10px var(--primary-color);
+                }
+                
+                /* Visual indicator for remaining time */
+                .progress-remaining {
+                    position: absolute;
+                    top: 0;
+                    left: 0; /* Will be updated by JS */
+                    height: 100%;
+                    width: 100%;
+                    background: rgba(255, 255, 255, 0.1);
+                    border-left: 1px solid rgba(255, 255, 255, 0.3);
+                    pointer-events: none;
                 }
                 
                 .progress-handle {
@@ -930,10 +945,43 @@ class CyberPunkPlayer extends HTMLElement {
                     box-shadow: 0 0 8px var(--primary-color);
                     opacity: 0;
                     transition: opacity 0.2s ease;
+                    z-index: 2;
                 }
                 
+                /* Always show handle when progress is happening */
+                .progress-bar.active .progress-handle,
                 .progress-bar:hover .progress-handle {
                     opacity: 1;
+                }
+                
+                /* Time markers for visualization */
+                .progress-markers {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                }
+                
+                .marker-25, .marker-50, .marker-75 {
+                    position: absolute;
+                    top: 0;
+                    height: 100%;
+                    width: 1px;
+                    background: rgba(255, 255, 255, 0.2);
+                }
+                
+                .marker-25 {
+                    left: 25%;
+                }
+                
+                .marker-50 {
+                    left: 50%;
+                }
+                
+                .marker-75 {
+                    left: 75%;
                 }
                 
                 .time-display {
@@ -1289,7 +1337,13 @@ class CyberPunkPlayer extends HTMLElement {
                             <div class="progress-container">
                                 <div class="progress-bar">
                                     <div class="progress-current"></div>
+                                    <div class="progress-remaining"></div>
                                     <div class="progress-handle"></div>
+                                    <div class="progress-markers">
+                                        <div class="marker-25"></div>
+                                        <div class="marker-50"></div>
+                                        <div class="marker-75"></div>
+                                    </div>
                                 </div>
                                 <div class="time-display">
                                     <span class="current-time">0:00</span>
@@ -1373,7 +1427,7 @@ class CyberPunkPlayer extends HTMLElement {
                             <div class="social-card">
                                 <div class="social-card-title">
                                     <svg viewBox="0 0 24 24">
-                                        <path fill="currentColor" d="M12 2c2.76 0 5 2.24 5 5 0 2.21-1.79 4-4 4s-4-1.79-4-4l.9.9C9.91 5.57 11.09 4.5 12.5 4.5c1.79 0 3.25 1.46 3.25 3.25 0 .17-.02.34-.04.51h-.02c-.23 1.56-1.56 2.74-3.19 2.74-1.32 0-2.42-.81-2.91-1.95-.04-.11-.08-.23-.11-.35h.02c-.03-.15-.05-.3-.05-.45 0-.55.11-1.08.31-1.55C10.22 5.57 11.06 5 12 5c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1c0-.55-.45-1-1-1-.43 0-.79.27-.94.65-.11.25-.16.52-.16.8 0 .13.01.26.04.39l-.02.01c.03.1.07.19.11.28.31.57.9.95 1.58.95.86 0 1.58-.7 1.58-1.56 0-.15-.03-.29-.07-.44h.01c-.12-.53-.56-.91-1.1-.91-.47 0-.86.38-.86.86 0 .47.38.86.86.86.28 0 .53-.12.71-.31.42.77 1.24 1.29 2.17 1.29 1.36 0 2.5-1.11 2.5-2.5 0-.08 0-.16-.01-.24h.01c-.07-2.09-1.81-3.76-3.93-3.76L12 2m0 10c4.41 0 8 1.79 8 4v2H4v-2c0-2.21 3.59-4 8-4z"/>
+                                        <path fill="currentColor" d="M12 2c2.76 0 5 2.24 5 5 0 2.21-1.79 4-4 4s-4-1.79-4-4l.9.9C9.91 5.57 11.09 4.5 12.5 4.5c1.79 0 3.25 1.46 3.25 3.25 0 .17-.02.34-.04.51h-.02c-.23 1.56-1.56 2.74-3.19 2.74-1.32 0-2.42-.81-2.91-1.95-.04-.11-.08-.23-.11-.35h.02c-.03-.15-.05-.3-.05-.45 0-.55.11-1.08.31-1.55C10.22 5.57 11.06 5 12 5c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1c0-.55-.45-1-1-1-.43 0-.79.27-.94.65-.11.25-.16.52-.16.8 0 .13.01.26.04.39l-.02.01c.03.1.07.19.11.28.31.57.9.95 1.58.95.86 0 1.58-.7 1.58-1.56 0-.15-.03-.29-.07-.44h.01c-.12-.53-.56-.91-1.1-.91-.47 0-.86.38-.86.86 0 .47.38.86.86.86.28 0 .53-.12.71-.31.42.77 1.24 1.29 2.17 1.29 1.36 0 2.5-1.11 2.5-2.5 0-.08 0-.16-.01-.24h.01c-.07-2.09-1.81-3.76-3.93-3.76L12 2m0 10c4.41 0 8 1.79 8 4v2H4v-2c0-2.21 3.59-4 1.79 4 4v2H4v-2c0-2.21 3.59-4 8-4z"/>
                                     </svg>
                                     <span>FOLLOW</span>
                                 </div>
@@ -1403,7 +1457,7 @@ class CyberPunkPlayer extends HTMLElement {
                                             <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
                                         </svg>
                                     </a>
-<a href="#" class="artist-link artist-website" target="_blank" title="Official Website">
+                                    <a href="#" class="artist-link artist-website" target="_blank" title="Official Website">
                                         <svg viewBox="0 0 24 24">
                                             <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95a15.65 15.65 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.92 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56A7.987 7.987 0 0 1 5.08 16zm2.95-8H5.08a7.987 7.987 0 0 1 4.33-3.56A15.65 15.65 0 0 0 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/>
                                         </svg>
@@ -1539,25 +1593,51 @@ class CyberPunkPlayer extends HTMLElement {
             }
             // Start visualization
             this._startVisualization();
+            
+            // Add active class to progress bar when playing
+            const progressBar = this._shadow.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.classList.add('active');
+            }
         });
         
         this._audioElement.addEventListener('pause', () => {
             this._setPlayingState(false);
             // Stop visualization
             this._stopVisualization();
+            
+            // Remove active class from progress bar when paused
+            const progressBar = this._shadow.querySelector('.progress-bar');
+            if (progressBar) {
+                progressBar.classList.remove('active');
+            }
         });
         
+        // FIX ISSUE 1: Ensure next song plays automatically when one ends
         this._audioElement.addEventListener('ended', () => {
             this._setPlayingState(false);
             this._stopVisualization();
             
             // Auto play next if not in repeat mode
             if (!this._isRepeat) {
+                // Change to the next song
                 this._changeSong(1);
+                
+                // Play the next song automatically
+                if (this._audioElement) {
+                    // Add a slight delay to ensure the new song is loaded
+                    setTimeout(() => {
+                        this._audioElement.play().catch(err => {
+                            console.error("Error auto-playing next song:", err);
+                        });
+                    }, 500);
+                }
             } else {
                 // For repeat mode, play the same song again
                 this._audioElement.currentTime = 0;
-                this._audioElement.play();
+                this._audioElement.play().catch(err => {
+                    console.error("Error replaying current song:", err);
+                });
             }
         });
         
@@ -1679,6 +1759,9 @@ class CyberPunkPlayer extends HTMLElement {
     
     // Helper to convert hex color to RGB values
     _hexToRgb(hex) {
+        // Handle empty or undefined
+        if (!hex) return null;
+        
         // Remove the # if present
         hex = hex.replace(/^#/, '');
         
@@ -1757,15 +1840,54 @@ class CyberPunkPlayer extends HTMLElement {
             });
         }
 
-        // Progress bar
+        // Enhanced Progress bar interactions
         const progressBar = this._shadow.querySelector('.progress-bar');
+        const progressCurrent = this._shadow.querySelector('.progress-current');
+        const progressRemaining = this._shadow.querySelector('.progress-remaining');
+        const progressHandle = this._shadow.querySelector('.progress-handle');
+        
         if (progressBar) {
+            // Click on progress bar to seek
             progressBar.addEventListener('click', (e) => {
                 if (!this._audioElement) return;
                 
                 const rect = progressBar.getBoundingClientRect();
                 const position = (e.clientX - rect.left) / rect.width;
                 this._audioElement.currentTime = position * this._audioElement.duration;
+                
+                // Update the progress UI immediately
+                this._updateProgressUI(position);
+            });
+            
+            // Add hover effect to show handle
+            progressBar.addEventListener('mousemove', (e) => {
+                if (!this._audioElement || !progressHandle) return;
+                
+                const rect = progressBar.getBoundingClientRect();
+                const position = (e.clientX - rect.left) / rect.width;
+                
+                // Show preview position
+                progressHandle.style.left = `${position * 100}%`;
+                progressHandle.style.opacity = "1";
+                
+                // Show remaining time indicator
+                if (progressRemaining) {
+                    progressRemaining.style.left = `${position * 100}%`;
+                    progressRemaining.style.display = "block";
+                }
+            });
+            
+            // Hide preview on mouse leave
+            progressBar.addEventListener('mouseleave', () => {
+                if (!this._audioElement || this._audioElement.paused) {
+                    if (progressHandle) progressHandle.style.opacity = "0";
+                }
+                
+                // Reset remaining indicator
+                if (progressRemaining && !this._audioElement.paused) {
+                    const currentProgress = this._audioElement.currentTime / this._audioElement.duration;
+                    progressRemaining.style.left = `${currentProgress * 100}%`;
+                }
             });
         }
 
@@ -1818,6 +1940,25 @@ class CyberPunkPlayer extends HTMLElement {
         
         // Setup share buttons
         this._setupShareButtons();
+    }
+    
+    // Helper method to update progress UI elements
+    _updateProgressUI(position) {
+        const progressCurrent = this._shadow.querySelector('.progress-current');
+        const progressHandle = this._shadow.querySelector('.progress-handle');
+        const progressRemaining = this._shadow.querySelector('.progress-remaining');
+        
+        if (progressCurrent) {
+            progressCurrent.style.width = `${position * 100}%`;
+        }
+        
+        if (progressHandle) {
+            progressHandle.style.left = `${position * 100}%`;
+        }
+        
+        if (progressRemaining) {
+            progressRemaining.style.left = `${position * 100}%`;
+        }
     }
     
     _setupResizeListener() {
@@ -1887,7 +2028,9 @@ class CyberPunkPlayer extends HTMLElement {
         
         // Always auto-play the new song if the previous one was playing
         if (wasPlaying && this._audioElement) {
-            this._audioElement.play();
+            this._audioElement.play().catch(err => {
+                console.error("Error playing after changing song:", err);
+            });
         }
     }
 
@@ -1944,20 +2087,21 @@ class CyberPunkPlayer extends HTMLElement {
         if (!this._audioElement) return;
         
         const currentTime = this._audioElement.currentTime;
+        const duration = this._audioElement.duration;
         const currentTimeElement = this._shadow.querySelector('.current-time');
+        
         if (currentTimeElement) {
             currentTimeElement.textContent = this._formatTime(currentTime);
         }
         
-        // Update progress bar
-        const progress = this._audioElement.currentTime / this._audioElement.duration;
-        const progressCurrent = this._shadow.querySelector('.progress-current');
-        const progressHandle = this._shadow.querySelector('.progress-handle');
-        
-        if (!isNaN(progress)) {
-            if (progressCurrent) progressCurrent.style.width = `${progress * 100}%`;
-            if (progressHandle) progressHandle.style.left = `${progress * 100}%`;
+        // Calculate progress percentage
+        let progress = 0;
+        if (!isNaN(duration) && duration > 0) {
+            progress = currentTime / duration;
         }
+        
+        // Update all progress UI elements
+        this._updateProgressUI(progress);
     }
 
     _updateDuration() {
@@ -2151,7 +2295,16 @@ class CyberPunkPlayer extends HTMLElement {
                     this.render();
                     
                     if (wasPlaying && this._audioElement) {
-                        this._audioElement.play();
+                        this._audioElement.play().catch(err => {
+                            console.error("Error playing after song selection:", err);
+                        });
+                    } else if (!wasPlaying) {
+                        // Auto-play when clicking on a track in the playlist
+                        if (this._audioElement) {
+                            this._audioElement.play().catch(err => {
+                                console.error("Error playing selected song:", err);
+                            });
+                        }
                     }
                 });
                 
@@ -2182,7 +2335,9 @@ class CyberPunkPlayer extends HTMLElement {
             switch (command) {
                 case 'play':
                     if (this._audioElement && this._audioElement.paused) {
-                        this._audioElement.play();
+                        this._audioElement.play().catch(err => {
+                            console.error("Error on play command:", err);
+                        });
                     }
                     break;
                 case 'pause':
