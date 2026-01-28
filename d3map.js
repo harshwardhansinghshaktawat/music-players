@@ -134,28 +134,31 @@ class VisitorMapElement extends HTMLElement {
   renderMap() {
     if (!this.worldData || !window.d3) return;
 
-    // 1. Get the CURRENT exact size of the container
+    // 1. Get container dimensions
     const container = this.shadowRoot.getElementById('container');
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    // If size is 0 (hidden or loading), try again later
+    // Safety check
     if (width === 0 || height === 0) return;
 
     const svg = d3.select(this.shadowRoot.getElementById('viz'));
-    svg.selectAll("*").remove(); // Wipe canvas clean for redraw
+    svg.selectAll("*").remove();
 
-    // 2. Setup Responsive Projection
-    // This fits the world map into whatever box size we currently have
+    // 2. "FILL WIDTH" PROJECTION LOGIC
+    // Instead of .fitSize(), we manually calculate scale based on WIDTH.
+    // This ensures the map is always big enough to touch the sides.
     const projection = d3.geoMercator()
-      .fitSize([width, height], topojson.feature(this.worldData, this.worldData.objects.countries));
-      
+      .scale(width / 6.4)               // Scale based on width (6.4 is the magic number for Mercator)
+      .translate([width / 2, height / 1.6]); // Center horizontally, shift down slightly to prioritize land over the Arctic
+
     const path = d3.geoPath().projection(projection);
 
-    // 3. Draw Countries
-    const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
+    // 3. Draw Map Layers
     const g = svg.append("g");
+    const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
 
+    // Draw Countries
     g.selectAll("path")
       .data(countries.features)
       .enter().append("path")
@@ -177,10 +180,9 @@ class VisitorMapElement extends HTMLElement {
     g.selectAll("circle")
       .data(validPoints)
       .enter().append("circle")
-      // D3 uses [Longitude, Latitude] order
       .attr("cx", d => projection([d.lng, d.lat])[0]) 
       .attr("cy", d => projection([d.lng, d.lat])[1])
-      .attr("r", Math.max(3, width / 200)) // Responsive dot size!
+      .attr("r", Math.max(4, width / 180)) // Markers scale slightly with map width
       .attr("class", d => {
         const isRecent = d.timestamp && new Date(d.timestamp) > oneDayAgo;
         if(isRecent) recent++;
@@ -192,34 +194,30 @@ class VisitorMapElement extends HTMLElement {
       })
       .on("mousemove", (event) => {
         const [x, y] = d3.pointer(event, container);
-        
-        // Prevent tooltip from going off right edge
-        const tooltipWidth = 150;
-        let leftPos = x + 10;
-        if (x + tooltipWidth > width) leftPos = x - tooltipWidth - 10;
-
-        tooltip.style("left", leftPos + "px")
-               .style("top", (y - 20) + "px");
+        // Flip tooltip if close to right edge
+        const xOffset = x > width - 160 ? -160 : 15; 
+        tooltip.style("left", (x + xOffset) + "px")
+               .style("top", (y - 10) + "px");
       })
       .on("mouseout", () => {
         tooltip.style("opacity", 0);
       });
 
-    // Update Stats
-    this.shadowRoot.getElementById('count-total').innerText = validPoints.length;
-    this.shadowRoot.getElementById('count-recent').innerText = recent;
+    // Update Stats UI
+    const totalEl = this.shadowRoot.getElementById('count-total');
+    const recentEl = this.shadowRoot.getElementById('count-recent');
+    if(totalEl) totalEl.innerText = validPoints.length;
+    if(recentEl) recentEl.innerText = recent;
 
-    // 5. Add Responsive Zoom
+    // 5. Add Zoom/Pan Behavior
     const zoom = d3.zoom()
       .scaleExtent([1, 8])
-      // Restrict panning so user can't lose the map
-      .translateExtent([[0, 0], [width, height]])
+      .translateExtent([[-width, -height], [width * 2, height * 2]]) // Allow panning beyond edges
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
       });
 
     svg.call(zoom);
   }
-}
 
 customElements.define('visitor-map-element', VisitorMapElement);
