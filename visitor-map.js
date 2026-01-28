@@ -66,12 +66,13 @@ class VisitorMapElement extends HTMLElement {
           height: 100%;
         }
         .map-container {
-          width: 100%;
-          height: 100%;
-          position: relative;
-          background: #f0f4f8;
-          overflow: hidden;
-        }
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #f0f4f8;
+  overflow: hidden;
+  z-index: -1; /* Send to very back */
+}
         svg {
           width: 100%;
           height: 100%;
