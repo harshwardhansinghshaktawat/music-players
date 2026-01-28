@@ -33,24 +33,38 @@ class VisitorMapElement extends HTMLElement {
     }
   }
 
-  // FIXED: Miller Projection (correct for standard world maps with viewBox 1000x647)
+ // 🔧 CALIBRATED MAP PROJECTION
   latLongToXY(lat, lon) {
     const width = 1000;
     const height = 647;
 
-    // Longitude to X (simple linear mapping)
-    const x = (lon + 180) * (width / 360);
+    // --- CALIBRATION SETTINGS (Tweak these if markers are slightly off) ---
+    const xOffset = 28;   // Moves markers Right (+) or Left (-)
+    const yOffset = 125;  // Moves markers Down (+) or Up (-)
+    const mapScale = 0.97; // Scales the map spread (Use 1.0 for default)
+    // ---------------------------------------------------------------------
 
-    // Latitude to Y (Miller Projection Formula)
-    // This prevents polar regions from stretching to infinity like Mercator
+    // 1. Longitude to X (Linear / Equirectangular)
+    // (lon + 180) converts range -180...180 to 0...360
+    let x = (lon + 180) * (width / 360);
+
+    // 2. Latitude to Y (Miller Projection)
+    // This formula handles the "stretching" as you get closer to poles
     const latRad = (lat * Math.PI) / 180;
     const millerY = 1.25 * Math.log(Math.tan((Math.PI / 4) + (0.4 * latRad)));
-    
-    // Scale to map height
     const scale = width / (2 * Math.PI);
     
-    // Y is inverted in SVG (0 is top)
-    const y = (height / 2) - (millerY * scale);
+    // Calculate raw Y (0 is top in SVG)
+    let y = (height / 2) - (millerY * scale);
+
+    // 3. Apply Calibration Adjustments
+    // Apply Scale relative to center
+    x = ((x - width / 2) * mapScale) + (width / 2);
+    y = ((y - height / 2) * mapScale) + (height / 2);
+
+    // Apply Shifts
+    x += xOffset;
+    y += yOffset;
 
     return { x, y };
   }
