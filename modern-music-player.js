@@ -12,6 +12,7 @@ class ModernMusicPlayer extends HTMLElement {
         this._currentView = 'albums'; // 'albums' or 'songs'
         this._selectedAlbum = null;
         this._animationId = null;
+        this._allSongs = []; // Store all songs separately
         
         this._root = document.createElement('div');
         this._root.innerHTML = `
@@ -22,7 +23,6 @@ class ModernMusicPlayer extends HTMLElement {
                     --primary-color: #6366f1;
                     --secondary-color: #4f46e5;
                     --background-color: #0f172a;
-                    --background-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
                     --surface-color: #1e293b;
                     --surface-light: #334155;
                     --text-primary: #f1f5f9;
@@ -55,7 +55,7 @@ class ModernMusicPlayer extends HTMLElement {
                 .player-container {
                     width: 100%;
                     height: 100%;
-                    background: var(--background-gradient);
+                    background: var(--background-color);
                     border-radius: var(--radius-xl);
                     overflow: hidden;
                     display: flex;
@@ -67,7 +67,7 @@ class ModernMusicPlayer extends HTMLElement {
                 /* Header */
                 .player-header {
                     padding: 1.5rem 2rem;
-                    background: linear-gradient(to bottom, rgba(99, 102, 241, 0.1), transparent);
+                    background: var(--surface-color);
                     border-bottom: 1px solid var(--border-color);
                     display: flex;
                     justify-content: space-between;
@@ -90,42 +90,7 @@ class ModernMusicPlayer extends HTMLElement {
                     margin: 0;
                     font-size: 1.5rem;
                     font-weight: 700;
-                    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                }
-                
-                .header-actions {
-                    display: flex;
-                    gap: 0.5rem;
-                }
-                
-                .header-btn {
-                    padding: 0.5rem 1rem;
-                    background: var(--surface-color);
-                    border: 1px solid var(--border-color);
-                    border-radius: var(--radius-md);
-                    color: var(--text-secondary);
-                    font-size: 0.875rem;
-                    font-weight: 500;
-                    cursor: pointer;
-                    transition: var(--transition);
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                }
-                
-                .header-btn:hover {
-                    background: var(--surface-light);
-                    color: var(--text-primary);
-                    transform: translateY(-1px);
-                }
-                
-                .header-btn svg {
-                    width: 1rem;
-                    height: 1rem;
-                    fill: currentColor;
+                    color: var(--primary-color);
                 }
                 
                 /* Main Content Area */
@@ -217,6 +182,7 @@ class ModernMusicPlayer extends HTMLElement {
                     width: 1rem;
                     height: 1rem;
                     fill: var(--text-muted);
+                    pointer-events: none;
                 }
                 
                 .browser-content {
@@ -268,7 +234,7 @@ class ModernMusicPlayer extends HTMLElement {
                 
                 .album-card.active {
                     border-color: var(--primary-color);
-                    background: rgba(99, 102, 241, 0.1);
+                    background: var(--surface-light);
                 }
                 
                 .album-cover {
@@ -293,7 +259,7 @@ class ModernMusicPlayer extends HTMLElement {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+                    background: var(--primary-color);
                 }
                 
                 .album-cover-placeholder svg {
@@ -365,7 +331,7 @@ class ModernMusicPlayer extends HTMLElement {
                 }
                 
                 .song-item.active {
-                    background: rgba(99, 102, 241, 0.1);
+                    background: var(--surface-light);
                     border-color: var(--primary-color);
                 }
                 
@@ -453,13 +419,13 @@ class ModernMusicPlayer extends HTMLElement {
                     content: '';
                     position: absolute;
                     inset: 0;
-                    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(244, 63, 94, 0.2));
+                    background: var(--primary-color);
                     opacity: 0;
                     transition: var(--transition);
                 }
                 
                 .current-cover.playing::before {
-                    opacity: 1;
+                    opacity: 0.2;
                 }
                 
                 .current-cover img {
@@ -474,7 +440,8 @@ class ModernMusicPlayer extends HTMLElement {
                     left: 0;
                     right: 0;
                     height: 80px;
-                    background: linear-gradient(to top, rgba(15, 23, 42, 0.9), transparent);
+                    background: var(--background-color);
+                    opacity: 0.9;
                     display: flex;
                     align-items: flex-end;
                     padding: 1rem;
@@ -502,12 +469,23 @@ class ModernMusicPlayer extends HTMLElement {
                 .current-artist {
                     font-size: 1.25rem;
                     color: var(--text-secondary);
-                    margin-bottom: 0.75rem;
+                    margin-bottom: 0.5rem;
                 }
                 
                 .current-album {
                     font-size: 1rem;
                     color: var(--text-muted);
+                    margin-bottom: 0.5rem;
+                }
+                
+                .current-genre {
+                    display: inline-block;
+                    padding: 0.25rem 0.75rem;
+                    background: var(--surface-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: 999px;
+                    font-size: 0.875rem;
+                    color: var(--text-secondary);
                     margin-bottom: 2rem;
                 }
                 
@@ -574,7 +552,7 @@ class ModernMusicPlayer extends HTMLElement {
                     top: 0;
                     left: 0;
                     height: 100%;
-                    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+                    background: var(--primary-color);
                     border-radius: 3px;
                     transition: width 0.1s linear;
                 }
@@ -657,13 +635,13 @@ class ModernMusicPlayer extends HTMLElement {
                 .play-btn {
                     width: 3.5rem;
                     height: 3.5rem;
-                    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+                    background: var(--primary-color);
                     color: white;
                     box-shadow: var(--shadow-lg);
                 }
                 
                 .play-btn:hover {
-                    background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+                    background: var(--secondary-color);
                     transform: scale(1.05);
                 }
                 
@@ -739,6 +717,36 @@ class ModernMusicPlayer extends HTMLElement {
                     margin-bottom: 0.5rem;
                 }
                 
+                .back-btn {
+                    margin-bottom: 1rem;
+                    width: 100%;
+                    padding: 0.75rem 1rem;
+                    background: var(--background-color);
+                    border: 1px solid var(--border-color);
+                    border-radius: var(--radius-md);
+                    color: var(--text-secondary);
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: var(--transition);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0.5rem;
+                }
+                
+                .back-btn:hover {
+                    background: var(--surface-light);
+                    color: var(--text-primary);
+                }
+                
+                .back-btn svg {
+                    width: 1rem;
+                    height: 1rem;
+                    fill: currentColor;
+                    transform: rotate(180deg);
+                }
+                
                 /* Responsive */
                 @media (max-width: 1024px) {
                     .browser-sidebar {
@@ -797,15 +805,6 @@ class ModernMusicPlayer extends HTMLElement {
                         font-size: 1.25rem;
                     }
                     
-                    .header-btn {
-                        padding: 0.5rem;
-                        font-size: 0;
-                    }
-                    
-                    .header-btn svg {
-                        margin: 0;
-                    }
-                    
                     .controls-left,
                     .controls-right {
                         gap: 0.5rem;
@@ -835,14 +834,6 @@ class ModernMusicPlayer extends HTMLElement {
                             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                         </svg>
                         <h1>Music Player</h1>
-                    </div>
-                    <div class="header-actions">
-                        <button class="header-btn search-btn">
-                            <svg viewBox="0 0 24 24">
-                                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                            </svg>
-                            <span>Search</span>
-                        </button>
                     </div>
                 </div>
                 
@@ -962,8 +953,8 @@ class ModernMusicPlayer extends HTMLElement {
     }
     
     static get observedAttributes() {
-        return ['player-data', 'primary-color', 'secondary-color', 'background-color', 
-                'text-primary', 'text-secondary', 'accent-color', 'title-font-family', 'text-font-family'];
+        return ['player-data', 'player-name', 'primary-color', 'secondary-color', 'background-color', 
+                'text-primary', 'text-secondary', 'accent-color', 'surface-color', 'title-font-family', 'text-font-family'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
@@ -972,10 +963,16 @@ class ModernMusicPlayer extends HTMLElement {
         if (name === 'player-data' && newValue) {
             try {
                 this._playerData = JSON.parse(newValue);
+                this._allSongs = this._playerData.songs || [];
                 this._processAlbums();
                 this._render();
             } catch (e) {
                 console.error('Error parsing player data:', e);
+            }
+        } else if (name === 'player-name' && newValue) {
+            const titleElement = this._shadow.querySelector('.player-title h1');
+            if (titleElement) {
+                titleElement.textContent = newValue;
             }
         } else if (name.includes('color') || name.includes('font')) {
             this._updateStyles();
@@ -1010,6 +1007,7 @@ class ModernMusicPlayer extends HTMLElement {
                     name: albumName,
                     artist: song.artist || 'Unknown Artist',
                     coverImage: song.coverImage,
+                    genre: song.genre || '',
                     songs: []
                 });
             }
@@ -1024,33 +1022,18 @@ class ModernMusicPlayer extends HTMLElement {
         const primaryColor = this.getAttribute('primary-color');
         const secondaryColor = this.getAttribute('secondary-color');
         const backgroundColor = this.getAttribute('background-color');
+        const surfaceColor = this.getAttribute('surface-color');
         const textPrimary = this.getAttribute('text-primary');
         const textSecondary = this.getAttribute('text-secondary');
         const accentColor = this.getAttribute('accent-color');
-        const titleFont = this.getAttribute('title-font-family');
-        const textFont = this.getAttribute('text-font-family');
         
         if (primaryColor) this.style.setProperty('--primary-color', primaryColor);
         if (secondaryColor) this.style.setProperty('--secondary-color', secondaryColor);
-        if (backgroundColor) {
-            this.style.setProperty('--background-color', backgroundColor);
-            this.style.setProperty('--background-gradient', `linear-gradient(135deg, ${backgroundColor} 0%, ${this._lightenColor(backgroundColor, 10)} 100%)`);
-        }
+        if (backgroundColor) this.style.setProperty('--background-color', backgroundColor);
+        if (surfaceColor) this.style.setProperty('--surface-color', surfaceColor);
         if (textPrimary) this.style.setProperty('--text-primary', textPrimary);
         if (textSecondary) this.style.setProperty('--text-secondary', textSecondary);
         if (accentColor) this.style.setProperty('--accent-color', accentColor);
-    }
-    
-    _lightenColor(color, percent) {
-        const num = parseInt(color.replace('#', ''), 16);
-        const amt = Math.round(2.55 * percent);
-        const R = (num >> 16) + amt;
-        const G = (num >> 8 & 0x00FF) + amt;
-        const B = (num & 0x0000FF) + amt;
-        return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-            (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-            (B < 255 ? B < 1 ? 0 : B : 255))
-            .toString(16).slice(1);
     }
     
     _loadWaveSurferScript() {
@@ -1063,7 +1046,7 @@ class ModernMusicPlayer extends HTMLElement {
             const script = document.createElement('script');
             script.src = 'https://cdnjs.cloudflare.com/ajax/libs/wavesurfer.js/6.6.4/wavesurfer.min.js';
             script.onload = () => resolve();
-            script.onerror = () => resolve(); // Continue even if script fails
+            script.onerror = () => resolve();
             document.head.appendChild(script);
         });
     }
@@ -1108,6 +1091,7 @@ class ModernMusicPlayer extends HTMLElement {
         this._shadow.querySelectorAll('.view-toggle-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._currentView = btn.dataset.view;
+                this._selectedAlbum = null; // Reset selected album when switching views
                 this._updateViewToggle();
                 this._renderBrowser();
             });
@@ -1122,7 +1106,10 @@ class ModernMusicPlayer extends HTMLElement {
         
         // Play/Pause
         this._shadow.querySelector('.play-btn').addEventListener('click', () => {
-            if (this._audioElement) {
+            // If no song is loaded, load and play the first song
+            if (!this._currentPlaylist || this._currentSongIndex === undefined) {
+                this._playFirstSong();
+            } else if (this._audioElement) {
                 if (this._audioElement.paused) {
                     this._audioElement.play();
                 } else {
@@ -1181,6 +1168,23 @@ class ModernMusicPlayer extends HTMLElement {
         });
     }
     
+    _playFirstSong() {
+        // Determine which playlist to use
+        let playlist = [];
+        
+        if (this._selectedAlbum && this._selectedAlbum.songs) {
+            // If an album is selected, play from that album
+            playlist = this._selectedAlbum.songs;
+        } else if (this._allSongs && this._allSongs.length > 0) {
+            // Otherwise, play from all songs
+            playlist = this._allSongs;
+        }
+        
+        if (playlist.length > 0) {
+            this._playSong(0, playlist);
+        }
+    }
+    
     _render() {
         this._renderBrowser();
         this._updateNowPlaying();
@@ -1220,14 +1224,15 @@ class ModernMusicPlayer extends HTMLElement {
         if (this._searchQuery) {
             filteredAlbums = this._albums.filter(album => 
                 album.name.toLowerCase().includes(this._searchQuery) ||
-                album.artist.toLowerCase().includes(this._searchQuery)
+                album.artist.toLowerCase().includes(this._searchQuery) ||
+                (album.genre && album.genre.toLowerCase().includes(this._searchQuery))
             );
         }
         
         container.innerHTML = `
             <div class="albums-grid">
                 ${filteredAlbums.map(album => `
-                    <div class="album-card" data-album="${this._escapeHtml(album.name)}">
+                    <div class="album-card ${this._selectedAlbum?.name === album.name ? 'active' : ''}" data-album="${this._escapeHtml(album.name)}">
                         <div class="album-cover">
                             ${album.coverImage ? 
                                 `<img src="${album.coverImage}" alt="${this._escapeHtml(album.name)}">` :
@@ -1268,17 +1273,19 @@ class ModernMusicPlayer extends HTMLElement {
     _renderAllSongs(container) {
         let songs = [];
         
+        // FIX: Show all songs if no album is selected, otherwise show album songs
         if (this._selectedAlbum) {
             songs = this._selectedAlbum.songs;
-        } else if (this._playerData && this._playerData.songs) {
-            songs = this._playerData.songs;
+        } else {
+            songs = this._allSongs;
         }
         
         if (this._searchQuery) {
             songs = songs.filter(song =>
                 song.title.toLowerCase().includes(this._searchQuery) ||
                 song.artist.toLowerCase().includes(this._searchQuery) ||
-                (song.album && song.album.toLowerCase().includes(this._searchQuery))
+                (song.album && song.album.toLowerCase().includes(this._searchQuery)) ||
+                (song.genre && song.genre.toLowerCase().includes(this._searchQuery))
             );
         }
         
@@ -1297,8 +1304,8 @@ class ModernMusicPlayer extends HTMLElement {
         
         // Add back button if album is selected
         const backButton = this._selectedAlbum ? `
-            <button class="header-btn" style="margin-bottom: 1rem; width: 100%;" id="back-to-albums">
-                <svg viewBox="0 0 24 24" style="transform: rotate(180deg);">
+            <button class="back-btn" id="back-to-albums">
+                <svg viewBox="0 0 24 24">
                     <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
                 </svg>
                 <span>Back to Albums</span>
@@ -1308,21 +1315,27 @@ class ModernMusicPlayer extends HTMLElement {
         container.innerHTML = `
             ${backButton}
             <div class="songs-list">
-                ${songs.map((song, index) => `
-                    <div class="song-item ${this._currentSongIndex === index && this._selectedAlbum ? 'active' : ''}" data-index="${index}">
-                        <div class="song-cover">
-                            ${song.coverImage ? 
-                                `<img src="${song.coverImage}" alt="${this._escapeHtml(song.title)}">` :
-                                ''
-                            }
+                ${songs.map((song, index) => {
+                    // Find the actual index in the current playlist
+                    const actualIndex = this._currentPlaylist?.indexOf(song) ?? -1;
+                    const isActive = this._currentPlaylist && actualIndex === this._currentSongIndex;
+                    
+                    return `
+                        <div class="song-item ${isActive ? 'active' : ''}" data-index="${index}">
+                            <div class="song-cover">
+                                ${song.coverImage ? 
+                                    `<img src="${song.coverImage}" alt="${this._escapeHtml(song.title)}">` :
+                                    ''
+                                }
+                            </div>
+                            <div class="song-info">
+                                <div class="song-title">${this._escapeHtml(song.title)}</div>
+                                <div class="song-artist">${this._escapeHtml(song.artist)}</div>
+                            </div>
+                            <div class="song-duration">${song.duration || '0:00'}</div>
                         </div>
-                        <div class="song-info">
-                            <div class="song-title">${this._escapeHtml(song.title)}</div>
-                            <div class="song-artist">${this._escapeHtml(song.artist)}</div>
-                        </div>
-                        <div class="song-duration">${song.duration || '0:00'}</div>
-                    </div>
-                `).join('')}
+                    `;
+                }).join('')}
             </div>
         `;
         
@@ -1341,7 +1354,7 @@ class ModernMusicPlayer extends HTMLElement {
         container.querySelectorAll('.song-item').forEach(item => {
             item.addEventListener('click', () => {
                 const index = parseInt(item.dataset.index);
-                this._playSong(index, this._selectedAlbum ? this._selectedAlbum.songs : songs);
+                this._playSong(index, songs);
             });
         });
     }
@@ -1412,6 +1425,7 @@ class ModernMusicPlayer extends HTMLElement {
                 <div class="current-title">${this._escapeHtml(song.title)}</div>
                 <div class="current-artist">${this._escapeHtml(song.artist)}</div>
                 <div class="current-album">${this._escapeHtml(song.album || '')}</div>
+                ${song.genre ? `<div class="current-genre">${this._escapeHtml(song.genre)}</div>` : ''}
                 
                 ${links.length > 0 ? `
                     <div class="current-links">
@@ -1466,16 +1480,14 @@ class ModernMusicPlayer extends HTMLElement {
             const barCount = 60;
             const barWidth = width / barCount;
             
-            const gradient = ctx.createLinearGradient(0, height, 0, 0);
-            gradient.addColorStop(0, getComputedStyle(this).getPropertyValue('--primary-color'));
-            gradient.addColorStop(1, getComputedStyle(this).getPropertyValue('--accent-color'));
+            const primaryColor = getComputedStyle(this).getPropertyValue('--primary-color') || '#6366f1';
             
             for (let i = 0; i < barCount; i++) {
                 const value = this._dataArray[Math.floor(i * this._dataArray.length / barCount)];
                 const percent = value / 255;
                 const barHeight = percent * height * 0.8;
                 
-                ctx.fillStyle = gradient;
+                ctx.fillStyle = primaryColor;
                 ctx.fillRect(i * barWidth, height - barHeight, barWidth * 0.8, barHeight);
             }
         };
@@ -1528,6 +1540,16 @@ class ModernMusicPlayer extends HTMLElement {
         } else {
             playIcon.style.display = 'block';
             pauseIcon.style.display = 'none';
+        }
+        
+        // Update cover playing state
+        const currentCover = this._shadow.querySelector('.current-cover');
+        if (currentCover) {
+            if (this._isPlaying) {
+                currentCover.classList.add('playing');
+            } else {
+                currentCover.classList.remove('playing');
+            }
         }
     }
     
