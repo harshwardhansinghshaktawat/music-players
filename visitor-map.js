@@ -4,49 +4,51 @@ class VisitorMapElement extends HTMLElement {
         this._shadow = this.attachShadow({ mode: 'open' });
         this._map = null;
         this._markers = [];
-        this._infoWindow = null;
+        this._markerLayer = null;
         this._mapData = null;
+        this._tileLayer = 'osm'; // Default tile provider
         
         this._root = document.createElement('div');
         this._root.innerHTML = `
             <style>
+                /* Import Leaflet CSS from CDN */
+                @import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+                
                 :host {
                     display: block;
                     width: 100%;
                     height: 100%;
                     position: relative;
-                    box-sizing: border-box;
-                }
-                
-                *, *::before, *::after {
-                    box-sizing: inherit;
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 }
                 
                 .map-container {
                     width: 100%;
                     height: 100%;
                     position: relative;
-                    background: #e5e3df;
-                    border-radius: 8px;
+                    border-radius: 12px;
                     overflow: hidden;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
                 }
                 
                 #map {
                     width: 100%;
                     height: 100%;
+                    z-index: 0;
                 }
                 
                 .loading-overlay {
                     position: absolute;
                     top: 0;
                     left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(255, 255, 255, 0.9);
+                    right: 0;
+                    bottom: 0;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     display: flex;
-                    flex-direction: column;
                     align-items: center;
                     justify-content: center;
+                    flex-direction: column;
+                    color: white;
                     z-index: 1000;
                     transition: opacity 0.3s ease;
                 }
@@ -59,188 +61,258 @@ class VisitorMapElement extends HTMLElement {
                 .spinner {
                     width: 50px;
                     height: 50px;
-                    border: 4px solid #f3f3f3;
-                    border-top: 4px solid #3498db;
+                    border: 4px solid rgba(255, 255, 255, 0.3);
+                    border-top-color: white;
                     border-radius: 50%;
                     animation: spin 1s linear infinite;
                 }
                 
                 @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
+                    to { transform: rotate(360deg); }
                 }
                 
                 .loading-text {
-                    margin-top: 1rem;
-                    font-family: Arial, sans-serif;
-                    font-size: 14px;
-                    color: #666;
-                }
-                
-                .error-message {
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background: white;
-                    padding: 2rem;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                    text-align: center;
-                    max-width: 400px;
-                    font-family: Arial, sans-serif;
-                }
-                
-                .error-message h3 {
-                    margin: 0 0 1rem 0;
-                    color: #e74c3c;
-                }
-                
-                .error-message p {
-                    margin: 0;
-                    color: #666;
-                    font-size: 14px;
-                }
-                
-                /* Info Window Styles */
-                .info-window-content {
-                    font-family: Arial, sans-serif;
-                    padding: 8px;
-                    max-width: 250px;
-                }
-                
-                .info-window-title {
-                    font-weight: 600;
+                    margin-top: 20px;
                     font-size: 16px;
-                    margin-bottom: 8px;
-                    color: #333;
+                    font-weight: 500;
                 }
                 
-                .info-window-location {
-                    font-size: 14px;
-                    color: #666;
-                    margin-bottom: 4px;
-                    display: flex;
-                    align-items: flex-start;
-                }
-                
-                .info-window-location svg {
-                    width: 16px;
-                    height: 16px;
-                    margin-right: 6px;
-                    flex-shrink: 0;
-                    fill: #4285f4;
-                }
-                
-                .info-window-timestamp {
-                    font-size: 12px;
-                    color: #999;
-                    margin-top: 8px;
-                    padding-top: 8px;
-                    border-top: 1px solid #eee;
-                }
-                
-                .info-window-coords {
-                    font-size: 11px;
-                    color: #999;
-                    margin-top: 4px;
-                    font-family: monospace;
-                }
-                
-                /* Map Controls */
-                .map-stats {
+                .stats-panel {
                     position: absolute;
-                    top: 10px;
-                    left: 10px;
+                    top: 20px;
+                    left: 20px;
                     background: white;
-                    padding: 12px 16px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                    font-family: Arial, sans-serif;
-                    z-index: 100;
+                    padding: 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                    z-index: 1000;
+                    min-width: 200px;
                 }
                 
-                .map-stats-title {
-                    font-weight: 600;
-                    font-size: 14px;
-                    color: #333;
-                    margin-bottom: 4px;
-                }
-                
-                .map-stats-count {
-                    font-size: 24px;
+                .stats-title {
+                    font-size: 18px;
                     font-weight: 700;
-                    color: #4285f4;
+                    color: #1a202c;
+                    margin: 0 0 15px 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
                 }
                 
-                .map-stats-label {
-                    font-size: 12px;
-                    color: #666;
+                .stats-title svg {
+                    width: 24px;
+                    height: 24px;
+                    fill: #667eea;
                 }
                 
-                .zoom-controls {
+                .stat-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 12px;
+                    padding-bottom: 12px;
+                    border-bottom: 1px solid #e2e8f0;
+                }
+                
+                .stat-item:last-child {
+                    margin-bottom: 0;
+                    padding-bottom: 0;
+                    border-bottom: none;
+                }
+                
+                .stat-label {
+                    font-size: 14px;
+                    color: #718096;
+                    font-weight: 500;
+                }
+                
+                .stat-value {
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: #667eea;
+                }
+                
+                .controls-panel {
                     position: absolute;
-                    top: 10px;
-                    right: 10px;
+                    top: 20px;
+                    right: 20px;
                     display: flex;
                     flex-direction: column;
-                    gap: 8px;
-                    z-index: 100;
+                    gap: 10px;
+                    z-index: 1000;
                 }
                 
-                .zoom-btn {
-                    width: 40px;
-                    height: 40px;
+                .control-btn {
                     background: white;
                     border: none;
+                    width: 44px;
+                    height: 44px;
                     border-radius: 8px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                    cursor: pointer;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 20px;
-                    font-weight: 600;
-                    color: #666;
+                    cursor: pointer;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
                     transition: all 0.2s ease;
                 }
                 
-                .zoom-btn:hover {
-                    background: #f5f5f5;
-                    color: #333;
-                    transform: scale(1.05);
+                .control-btn:hover {
+                    background: #f7fafc;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
                 }
                 
-                .zoom-btn:active {
-                    transform: scale(0.95);
+                .control-btn:active {
+                    transform: translateY(0);
                 }
                 
-                /* Responsive */
+                .control-btn svg {
+                    width: 20px;
+                    height: 20px;
+                    fill: #4a5568;
+                }
+                
+                .legend-panel {
+                    position: absolute;
+                    bottom: 20px;
+                    left: 20px;
+                    background: white;
+                    padding: 15px 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+                    z-index: 1000;
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                }
+                
+                .legend-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                
+                .legend-marker {
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                }
+                
+                .legend-marker.recent {
+                    background: #48bb78;
+                }
+                
+                .legend-marker.old {
+                    background: #667eea;
+                }
+                
+                .legend-label {
+                    font-size: 13px;
+                    color: #4a5568;
+                    font-weight: 500;
+                }
+                
+                /* Leaflet Popup Custom Styles */
+                .leaflet-popup-content-wrapper {
+                    border-radius: 8px;
+                    padding: 0;
+                    overflow: hidden;
+                }
+                
+                .leaflet-popup-content {
+                    margin: 0;
+                    max-width: 300px;
+                }
+                
+                .custom-popup {
+                    font-family: 'Inter', sans-serif;
+                }
+                
+                .popup-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 15px;
+                }
+                
+                .popup-title {
+                    font-size: 16px;
+                    font-weight: 700;
+                    margin: 0 0 5px 0;
+                }
+                
+                .popup-subtitle {
+                    font-size: 13px;
+                    opacity: 0.9;
+                    margin: 0;
+                }
+                
+                .popup-body {
+                    padding: 15px;
+                }
+                
+                .popup-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 10px;
+                    font-size: 14px;
+                    color: #4a5568;
+                }
+                
+                .popup-row:last-child {
+                    margin-bottom: 0;
+                }
+                
+                .popup-icon {
+                    width: 16px;
+                    height: 16px;
+                    fill: #667eea;
+                    flex-shrink: 0;
+                }
+                
+                .popup-text {
+                    flex: 1;
+                }
+                
+                .popup-label {
+                    font-weight: 600;
+                    color: #2d3748;
+                }
+                
+                /* Map attribution styling */
+                .leaflet-control-attribution {
+                    font-size: 10px;
+                    background: rgba(255, 255, 255, 0.8) !important;
+                }
+                
+                /* Responsive Design */
                 @media (max-width: 768px) {
-                    .map-stats {
-                        top: auto;
-                        bottom: 10px;
+                    .stats-panel {
+                        top: 10px;
                         left: 10px;
-                        padding: 8px 12px;
+                        padding: 15px;
+                        min-width: 150px;
                     }
                     
-                    .map-stats-title {
-                        font-size: 12px;
+                    .stats-title {
+                        font-size: 16px;
                     }
                     
-                    .map-stats-count {
-                        font-size: 20px;
+                    .stat-value {
+                        font-size: 18px;
                     }
                     
-                    .zoom-controls {
+                    .controls-panel {
                         top: 10px;
                         right: 10px;
                     }
                     
-                    .zoom-btn {
-                        width: 36px;
-                        height: 36px;
-                        font-size: 18px;
+                    .legend-panel {
+                        bottom: 10px;
+                        left: 10px;
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 10px;
                     }
                 }
             </style>
@@ -248,28 +320,73 @@ class VisitorMapElement extends HTMLElement {
             <div class="map-container">
                 <div class="loading-overlay">
                     <div class="spinner"></div>
-                    <div class="loading-text">Loading map...</div>
+                    <div class="loading-text">Loading Map...</div>
                 </div>
+                
                 <div id="map"></div>
-                <div class="map-stats">
-                    <div class="map-stats-title">Visitors</div>
-                    <div class="map-stats-count">0</div>
-                    <div class="map-stats-label">locations</div>
+                
+                <div class="stats-panel">
+                    <div class="stats-title">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                        Visitor Stats
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Visitors</span>
+                        <span class="stat-value" id="totalVisitors">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Countries</span>
+                        <span class="stat-value" id="totalCountries">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Last 24h</span>
+                        <span class="stat-value" id="recentVisitors">0</span>
+                    </div>
                 </div>
-                <div class="zoom-controls">
-                    <button class="zoom-btn zoom-in" title="Zoom In">+</button>
-                    <button class="zoom-btn zoom-out" title="Zoom Out">−</button>
-                    <button class="zoom-btn zoom-reset" title="Reset Zoom">⊙</button>
+                
+                <div class="controls-panel">
+                    <button class="control-btn" id="zoomInBtn" title="Zoom In">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="zoomOutBtn" title="Zoom Out">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M19 13H5v-2h14v2z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="resetBtn" title="Reset View">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                        </svg>
+                    </button>
+                    <button class="control-btn" id="layerBtn" title="Change Map Style">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="legend-panel">
+                    <div class="legend-item">
+                        <div class="legend-marker recent"></div>
+                        <span class="legend-label">Last 24 hours</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-marker old"></div>
+                        <span class="legend-label">Older visits</span>
+                    </div>
                 </div>
             </div>
         `;
         
         this._shadow.appendChild(this._root);
-        this._setupControls();
     }
     
     static get observedAttributes() {
-        return ['map-data', 'api-key', 'initial-zoom', 'center-lat', 'center-lng', 'map-style'];
+        return ['map-data', 'tile-layer', 'zoom-level'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
@@ -277,89 +394,63 @@ class VisitorMapElement extends HTMLElement {
         
         if (name === 'map-data' && newValue) {
             try {
-                const data = JSON.parse(newValue);
-                this._mapData = data;
-                this._render();
+                this._mapData = JSON.parse(newValue);
+                if (this._map) {
+                    this._updateMap();
+                }
             } catch (e) {
                 console.error('Error parsing map data:', e);
             }
-        } else if (name === 'api-key' && newValue) {
-            this._apiKey = newValue;
-            this._loadGoogleMapsAPI();
+        } else if (name === 'tile-layer' && newValue) {
+            this._tileLayer = newValue;
+            if (this._map) {
+                this._changeTileLayer(newValue);
+            }
+        } else if (name === 'zoom-level' && newValue) {
+            this._zoomLevel = parseInt(newValue) || 2;
         }
     }
     
     connectedCallback() {
-        // Check if API key is provided
-        if (this._apiKey) {
-            this._loadGoogleMapsAPI();
-        } else {
-            console.warn('Google Maps API key not provided. Add api-key attribute to the element.');
-        }
+        this._tileLayer = this.getAttribute('tile-layer') || 'osm';
+        this._zoomLevel = parseInt(this.getAttribute('zoom-level')) || 2;
+        
+        this._loadLeafletScript().then(() => {
+            this._initializeMap();
+            this._setupEventListeners();
+        });
     }
     
     disconnectedCallback() {
-        // Clean up markers
-        this._clearMarkers();
+        if (this._map) {
+            this._map.remove();
+        }
     }
     
-    _setupControls() {
-        // Zoom controls
-        const zoomIn = this._shadow.querySelector('.zoom-in');
-        const zoomOut = this._shadow.querySelector('.zoom-out');
-        const zoomReset = this._shadow.querySelector('.zoom-reset');
-        
-        zoomIn.addEventListener('click', () => {
-            if (this._map) {
-                this._map.setZoom(this._map.getZoom() + 1);
+    _loadLeafletScript() {
+        return new Promise((resolve, reject) => {
+            // Check if Leaflet is already loaded
+            if (window.L) {
+                resolve();
+                return;
             }
-        });
-        
-        zoomOut.addEventListener('click', () => {
-            if (this._map) {
-                this._map.setZoom(this._map.getZoom() - 1);
-            }
-        });
-        
-        zoomReset.addEventListener('click', () => {
-            if (this._map && this._mapData && this._mapData.locations) {
-                this._fitBounds();
-            }
-        });
-    }
-    
-    _loadGoogleMapsAPI() {
-        // Check if Google Maps is already loaded
-        if (window.google && window.google.maps) {
-            this._initMap();
-            return;
-        }
-        
-        // Check if script is already loading
-        if (window.googleMapsLoading) {
-            window.googleMapsLoading.then(() => this._initMap());
-            return;
-        }
-        
-        // Load Google Maps script
-        window.googleMapsLoading = new Promise((resolve, reject) => {
+            
+            // Load Leaflet script from CDN
             const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${this._apiKey}&libraries=marker`;
+            script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+            script.crossOrigin = '';
             script.async = true;
             script.defer = true;
-            script.onload = () => {
-                resolve();
-                this._initMap();
-            };
-            script.onerror = () => {
-                reject(new Error('Failed to load Google Maps API'));
-                this._showError('Failed to load Google Maps API');
-            };
+            
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('Failed to load Leaflet'));
+            
             document.head.appendChild(script);
         });
     }
     
-    _initMap() {
+    _initializeMap() {
         const mapElement = this._shadow.getElementById('map');
         
         if (!mapElement) {
@@ -367,45 +458,155 @@ class VisitorMapElement extends HTMLElement {
             return;
         }
         
-        // Default center (world view)
-        const defaultCenter = { lat: 20, lng: 0 };
-        const defaultZoom = 2;
-        
-        // Create map
-        this._map = new google.maps.Map(mapElement, {
-            center: defaultCenter,
-            zoom: defaultZoom,
-            styles: this._getMapStyle(),
-            mapTypeControl: true,
-            mapTypeControlOptions: {
-                position: google.maps.ControlPosition.TOP_LEFT,
-                style: google.maps.MapTypeControlStyle.DROPDOWN_MENU
-            },
-            streetViewControl: true,
-            streetViewControlOptions: {
-                position: google.maps.ControlPosition.RIGHT_BOTTOM
-            },
-            fullscreenControl: true,
-            fullscreenControlOptions: {
-                position: google.maps.ControlPosition.RIGHT_TOP
-            },
-            zoomControl: false // We have custom zoom controls
+        // Initialize Leaflet map
+        this._map = L.map(mapElement, {
+            center: [20, 0],
+            zoom: this._zoomLevel,
+            zoomControl: false, // We have custom controls
+            attributionControl: true
         });
         
-        // Create info window
-        this._infoWindow = new google.maps.InfoWindow();
+        // Add tile layer
+        this._addTileLayer(this._tileLayer);
+        
+        // Create marker layer
+        this._markerLayer = L.layerGroup().addTo(this._map);
         
         // Hide loading overlay
-        this._hideLoading();
+        const loadingOverlay = this._shadow.querySelector('.loading-overlay');
+        if (loadingOverlay) {
+            setTimeout(() => {
+                loadingOverlay.classList.add('hidden');
+            }, 500);
+        }
         
-        // Render markers if data is available
+        // Update map if data is already available
         if (this._mapData) {
-            this._render();
+            this._updateMap();
         }
     }
     
-    _render() {
+    _addTileLayer(layerType) {
+        // Remove existing tile layer if any
+        if (this._currentTileLayer) {
+            this._map.removeLayer(this._currentTileLayer);
+        }
+        
+        // Different free tile providers
+        const tileLayers = {
+            // OpenStreetMap - Classic and reliable
+            osm: {
+                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            },
+            
+            // CartoDB Positron - Light and clean
+            positron: {
+                url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                attribution: '© OpenStreetMap © CartoDB',
+                maxZoom: 19
+            },
+            
+            // CartoDB Dark Matter - Dark theme
+            dark: {
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                attribution: '© OpenStreetMap © CartoDB',
+                maxZoom: 19
+            },
+            
+            // CartoDB Voyager - Colorful
+            voyager: {
+                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                attribution: '© OpenStreetMap © CartoDB',
+                maxZoom: 19
+            },
+            
+            // Stamen Terrain - Topographic
+            terrain: {
+                url: 'https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg',
+                attribution: 'Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap',
+                maxZoom: 18
+            },
+            
+            // Stamen Toner - High contrast B&W
+            toner: {
+                url: 'https://stamen-tiles-{s}.a.ssl.fastly.net/toner/{z}/{x}/{y}.png',
+                attribution: 'Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap',
+                maxZoom: 18
+            },
+            
+            // Esri World Street Map
+            esri: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Tiles © Esri',
+                maxZoom: 19
+            },
+            
+            // Esri World Imagery - Satellite
+            satellite: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Tiles © Esri',
+                maxZoom: 19
+            }
+        };
+        
+        const layer = tileLayers[layerType] || tileLayers.osm;
+        
+        this._currentTileLayer = L.tileLayer(layer.url, {
+            attribution: layer.attribution,
+            maxZoom: layer.maxZoom,
+            subdomains: ['a', 'b', 'c']
+        }).addTo(this._map);
+    }
+    
+    _changeTileLayer(layerType) {
+        this._addTileLayer(layerType);
+    }
+    
+    _setupEventListeners() {
+        // Zoom controls
+        const zoomInBtn = this._shadow.getElementById('zoomInBtn');
+        const zoomOutBtn = this._shadow.getElementById('zoomOutBtn');
+        const resetBtn = this._shadow.getElementById('resetBtn');
+        const layerBtn = this._shadow.getElementById('layerBtn');
+        
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener('click', () => {
+                this._map.zoomIn();
+            });
+        }
+        
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener('click', () => {
+                this._map.zoomOut();
+            });
+        }
+        
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this._fitMapToMarkers();
+            });
+        }
+        
+        if (layerBtn) {
+            layerBtn.addEventListener('click', () => {
+                this._cycleMapStyle();
+            });
+        }
+    }
+    
+    _cycleMapStyle() {
+        const styles = ['osm', 'positron', 'dark', 'voyager', 'terrain', 'satellite'];
+        const currentIndex = styles.indexOf(this._tileLayer);
+        const nextIndex = (currentIndex + 1) % styles.length;
+        this._tileLayer = styles[nextIndex];
+        this._changeTileLayer(this._tileLayer);
+    }
+    
+    _updateMap() {
         if (!this._map || !this._mapData || !this._mapData.locations) {
+            console.warn('Map or map data not ready');
             return;
         }
         
@@ -414,255 +615,175 @@ class VisitorMapElement extends HTMLElement {
         
         const locations = this._mapData.locations;
         
-        // Update stats
-        this._updateStats(locations.length);
+        if (locations.length === 0) {
+            console.warn('No locations to display');
+            return;
+        }
+        
+        const now = new Date();
+        const oneDayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        
+        let recentCount = 0;
+        const countries = new Set();
+        const bounds = [];
         
         // Create markers for each location
         locations.forEach((location, index) => {
             if (!location.latitude || !location.longitude) {
-                console.warn('Location missing coordinates:', location);
+                console.warn('Invalid location data:', location);
                 return;
             }
             
-            const position = {
-                lat: parseFloat(location.latitude),
-                lng: parseFloat(location.longitude)
-            };
+            const lat = parseFloat(location.latitude);
+            const lng = parseFloat(location.longitude);
+            
+            // Determine if this is a recent visit
+            const visitDate = location.timestamp ? new Date(location.timestamp) : null;
+            const isRecent = visitDate && visitDate > oneDayAgo;
+            
+            if (isRecent) recentCount++;
+            if (location.country && location.country !== 'Unknown Country') {
+                countries.add(location.country);
+            }
+            
+            // Create custom icon
+            const iconHtml = `
+                <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 0C9.373 0 4 5.373 4 12c0 9 12 28 12 28s12-19 12-28c0-6.627-5.373-12-12-12z" 
+                          fill="${isRecent ? '#48bb78' : '#667eea'}" 
+                          stroke="white" 
+                          stroke-width="2"/>
+                    <circle cx="16" cy="12" r="5" fill="white"/>
+                </svg>
+            `;
+            
+            const customIcon = L.divIcon({
+                html: iconHtml,
+                className: 'custom-marker',
+                iconSize: [32, 40],
+                iconAnchor: [16, 40],
+                popupAnchor: [0, -40]
+            });
             
             // Create marker
-            const marker = new google.maps.Marker({
-                position: position,
-                map: this._map,
-                title: location.title || `Location ${index + 1}`,
-                animation: google.maps.Animation.DROP,
-                icon: {
-                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">
-                            <path fill="#EA4335" d="M16 0C9.373 0 4 5.373 4 12c0 9 12 28 12 28s12-19 12-28c0-6.627-5.373-12-12-12z"/>
-                            <circle cx="16" cy="12" r="6" fill="white"/>
-                        </svg>
-                    `),
-                    scaledSize: new google.maps.Size(32, 40),
-                    anchor: new google.maps.Point(16, 40)
-                }
+            const marker = L.marker([lat, lng], { icon: customIcon });
+            
+            // Create popup content
+            const popupContent = this._createPopupContent(location, isRecent);
+            marker.bindPopup(popupContent, {
+                maxWidth: 300,
+                className: 'custom-popup'
             });
             
-            // Add click listener for info window
-            marker.addListener('click', () => {
-                this._showInfoWindow(marker, location);
-            });
-            
+            // Add to marker layer
+            marker.addTo(this._markerLayer);
             this._markers.push(marker);
+            bounds.push([lat, lng]);
         });
         
+        // Update statistics
+        this._updateStats(locations.length, countries.size, recentCount);
+        
         // Fit map to show all markers
-        if (this._markers.length > 0) {
-            this._fitBounds();
+        if (bounds.length > 0) {
+            this._map.fitBounds(bounds, { padding: [50, 50] });
+            
+            // Adjust zoom if only one location
+            if (bounds.length === 1) {
+                this._map.setZoom(10);
+            }
         }
     }
     
-    _showInfoWindow(marker, location) {
-        const content = this._createInfoWindowContent(location);
-        this._infoWindow.setContent(content);
-        this._infoWindow.open(this._map, marker);
-    }
-    
-    _createInfoWindowContent(location) {
-        const container = document.createElement('div');
-        container.className = 'info-window-content';
+    _createPopupContent(location, isRecent) {
+        const visitDate = location.timestamp ? new Date(location.timestamp) : null;
+        const dateStr = visitDate ? this._formatDate(visitDate) : 'Unknown';
         
-        // Title
-        const title = document.createElement('div');
-        title.className = 'info-window-title';
-        title.textContent = location.title || 'Visitor Location';
-        container.appendChild(title);
+        // Build location string
+        const locationParts = [];
+        if (location.city && location.city !== 'Unknown City') locationParts.push(location.city);
+        if (location.state) locationParts.push(location.state);
+        if (location.country && location.country !== 'Unknown Country') locationParts.push(location.country);
+        const locationStr = locationParts.length > 0 ? locationParts.join(', ') : 'Unknown Location';
         
-        // Location details
-        if (location.city || location.state || location.country) {
-            const locationDiv = document.createElement('div');
-            locationDiv.className = 'info-window-location';
-            
-            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            icon.setAttribute('viewBox', '0 0 24 24');
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z');
-            icon.appendChild(path);
-            locationDiv.appendChild(icon);
-            
-            const locationText = document.createElement('div');
-            const parts = [];
-            if (location.city && location.city !== 'Unknown City') parts.push(location.city);
-            if (location.state && location.state !== '') parts.push(location.state);
-            if (location.country && location.country !== 'Unknown Country') parts.push(location.country);
-            locationText.textContent = parts.join(', ') || 'Unknown Location';
-            locationDiv.appendChild(locationText);
-            
-            container.appendChild(locationDiv);
-        }
-        
-        // Coordinates
-        const coords = document.createElement('div');
-        coords.className = 'info-window-coords';
-        coords.textContent = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
-        container.appendChild(coords);
-        
-        // Timestamp
-        if (location.timestamp) {
-            const timestamp = document.createElement('div');
-            timestamp.className = 'info-window-timestamp';
-            const date = new Date(location.timestamp);
-            timestamp.textContent = `Visited: ${this._formatDate(date)}`;
-            container.appendChild(timestamp);
-        }
-        
-        return container;
+        return `
+            <div class="custom-popup">
+                <div class="popup-header">
+                    <div class="popup-title">${location.title || 'Visitor Location'}</div>
+                    <div class="popup-subtitle">${isRecent ? '🟢 Recent Visit' : '📍 Previous Visit'}</div>
+                </div>
+                <div class="popup-body">
+                    <div class="popup-row">
+                        <svg class="popup-icon" viewBox="0 0 24 24">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                        <span class="popup-text">
+                            <span class="popup-label">Location:</span> ${locationStr}
+                        </span>
+                    </div>
+                    <div class="popup-row">
+                        <svg class="popup-icon" viewBox="0 0 24 24">
+                            <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                        </svg>
+                        <span class="popup-text">
+                            <span class="popup-label">Time:</span> ${dateStr}
+                        </span>
+                    </div>
+                    <div class="popup-row">
+                        <svg class="popup-icon" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        <span class="popup-text">
+                            <span class="popup-label">Coordinates:</span> ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
     }
     
     _formatDate(date) {
         const now = new Date();
         const diff = now - date;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
         
-        if (days === 0) {
-            const hours = Math.floor(diff / (1000 * 60 * 60));
-            if (hours === 0) {
-                const minutes = Math.floor(diff / (1000 * 60));
-                return minutes <= 1 ? 'Just now' : `${minutes} minutes ago`;
-            }
-            return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
-        } else if (days === 1) {
-            return 'Yesterday';
-        } else if (days < 7) {
-            return `${days} days ago`;
-        } else {
-            return date.toLocaleDateString();
-        }
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+        if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+        if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+        
+        return date.toLocaleDateString();
     }
     
-    _fitBounds() {
-        if (!this._map || this._markers.length === 0) return;
+    _updateStats(total, countries, recent) {
+        const totalElement = this._shadow.getElementById('totalVisitors');
+        const countriesElement = this._shadow.getElementById('totalCountries');
+        const recentElement = this._shadow.getElementById('recentVisitors');
         
-        const bounds = new google.maps.LatLngBounds();
-        this._markers.forEach(marker => {
-            bounds.extend(marker.getPosition());
-        });
-        
-        this._map.fitBounds(bounds);
-        
-        // Adjust zoom if only one marker
-        if (this._markers.length === 1) {
-            google.maps.event.addListenerOnce(this._map, 'bounds_changed', () => {
-                if (this._map.getZoom() > 15) {
-                    this._map.setZoom(15);
-                }
-            });
-        }
+        if (totalElement) totalElement.textContent = total;
+        if (countriesElement) countriesElement.textContent = countries;
+        if (recentElement) recentElement.textContent = recent;
     }
     
     _clearMarkers() {
-        this._markers.forEach(marker => {
-            marker.setMap(null);
-        });
-        this._markers = [];
-    }
-    
-    _updateStats(count) {
-        const countElement = this._shadow.querySelector('.map-stats-count');
-        if (countElement) {
-            countElement.textContent = count;
+        if (this._markerLayer) {
+            this._markerLayer.clearLayers();
+            this._markers = [];
         }
     }
     
-    _hideLoading() {
-        const loadingOverlay = this._shadow.querySelector('.loading-overlay');
-        if (loadingOverlay) {
-            loadingOverlay.classList.add('hidden');
-            setTimeout(() => {
-                loadingOverlay.style.display = 'none';
-            }, 300);
+    _fitMapToMarkers() {
+        if (!this._markers || this._markers.length === 0) return;
+        
+        const bounds = this._markers.map(marker => marker.getLatLng());
+        this._map.fitBounds(bounds, { padding: [50, 50] });
+        
+        if (this._markers.length === 1) {
+            this._map.setZoom(10);
         }
-    }
-    
-    _showError(message) {
-        const container = this._shadow.querySelector('.map-container');
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
-        errorDiv.innerHTML = `
-            <h3>Error Loading Map</h3>
-            <p>${message}</p>
-        `;
-        container.appendChild(errorDiv);
-        this._hideLoading();
-    }
-    
-    _getMapStyle() {
-        // Clean, modern map style
-        return [
-            {
-                "featureType": "water",
-                "elementType": "geometry",
-                "stylers": [{"color": "#e9e9e9"}, {"lightness": 17}]
-            },
-            {
-                "featureType": "landscape",
-                "elementType": "geometry",
-                "stylers": [{"color": "#f5f5f5"}, {"lightness": 20}]
-            },
-            {
-                "featureType": "road.highway",
-                "elementType": "geometry.fill",
-                "stylers": [{"color": "#ffffff"}, {"lightness": 17}]
-            },
-            {
-                "featureType": "road.highway",
-                "elementType": "geometry.stroke",
-                "stylers": [{"color": "#ffffff"}, {"lightness": 29}, {"weight": 0.2}]
-            },
-            {
-                "featureType": "road.arterial",
-                "elementType": "geometry",
-                "stylers": [{"color": "#ffffff"}, {"lightness": 18}]
-            },
-            {
-                "featureType": "road.local",
-                "elementType": "geometry",
-                "stylers": [{"color": "#ffffff"}, {"lightness": 16}]
-            },
-            {
-                "featureType": "poi",
-                "elementType": "geometry",
-                "stylers": [{"color": "#f5f5f5"}, {"lightness": 21}]
-            },
-            {
-                "elementType": "labels.text.stroke",
-                "stylers": [{"visibility": "on"}, {"color": "#ffffff"}, {"lightness": 16}]
-            },
-            {
-                "elementType": "labels.text.fill",
-                "stylers": [{"saturation": 36}, {"color": "#333333"}, {"lightness": 40}]
-            },
-            {
-                "elementType": "labels.icon",
-                "stylers": [{"visibility": "off"}]
-            },
-            {
-                "featureType": "transit",
-                "elementType": "geometry",
-                "stylers": [{"color": "#f2f2f2"}, {"lightness": 19}]
-            },
-            {
-                "featureType": "administrative",
-                "elementType": "geometry.fill",
-                "stylers": [{"color": "#fefefe"}, {"lightness": 20}]
-            },
-            {
-                "featureType": "administrative",
-                "elementType": "geometry.stroke",
-                "stylers": [{"color": "#fefefe"}, {"lightness": 17}, {"weight": 1.2}]
-            }
-        ];
     }
 }
 
-// Register the custom element
-customElements.define('visitor-map', VisitorMapElement);
+customElements.define('visitor-map-element', VisitorMapElement);
