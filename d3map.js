@@ -50,7 +50,6 @@ class D3WorldMapElement extends HTMLElement {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           overflow: hidden;
           border-radius: 12px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
           display: flex;
           flex-direction: column;
         }
@@ -66,11 +65,7 @@ class D3WorldMapElement extends HTMLElement {
           width: 100%;
           height: 100%;
           display: block;
-          cursor: grab;
-        }
-        
-        #map:active {
-          cursor: grabbing;
+          cursor: default;
         }
         
         .country {
@@ -79,6 +74,7 @@ class D3WorldMapElement extends HTMLElement {
           stroke-width: 0.5;
           transition: fill 0.3s ease;
           opacity: 0.9;
+          pointer-events: all;
         }
         
         .country:hover {
@@ -91,6 +87,7 @@ class D3WorldMapElement extends HTMLElement {
           transition: opacity 0.3s ease;
           transform-origin: center bottom;
           transform-box: fill-box;
+          pointer-events: all;
         }
         
         .location-marker:hover {
@@ -100,11 +97,13 @@ class D3WorldMapElement extends HTMLElement {
         .marker-pin-recent {
           fill: #48bb78;
           filter: drop-shadow(0 4px 8px rgba(72, 187, 120, 0.5));
+          pointer-events: all;
         }
         
         .marker-pin-old {
           fill: #4299e1;
           filter: drop-shadow(0 4px 8px rgba(66, 153, 225, 0.5));
+          pointer-events: all;
         }
         
         .marker-pulse {
@@ -115,6 +114,7 @@ class D3WorldMapElement extends HTMLElement {
           transform-origin: center bottom;
           transform-box: fill-box;
           animation: pulse-ring 2s ease-out infinite;
+          pointer-events: none;
         }
         
         @keyframes pulse-ring {
@@ -129,13 +129,14 @@ class D3WorldMapElement extends HTMLElement {
         }
         
         .visit-badge {
-          pointer-events: none;
+          pointer-events: all;
         }
         
         .visit-badge-bg {
           fill: white;
           stroke: #2d3748;
           stroke-width: 1;
+          pointer-events: all;
         }
         
         .visit-badge-text {
@@ -145,6 +146,7 @@ class D3WorldMapElement extends HTMLElement {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
           text-anchor: middle;
           dominant-baseline: middle;
+          pointer-events: none;
         }
         
         .tooltip {
@@ -748,10 +750,14 @@ class D3WorldMapElement extends HTMLElement {
     
     this.path = window.d3.geoPath().projection(this.projection);
     
-    // Setup zoom behavior
+    // Setup zoom behavior with constraint to prevent zooming out beyond original scale
     this.zoom = window.d3.zoom()
       .scaleExtent([1, 8])
       .on('zoom', (event) => {
+        // Constrain zoom to minimum of 1 (prevents zooming out)
+        if (event.transform.k < 1) {
+          event.transform.k = 1;
+        }
         svg.selectAll('.countries').attr('transform', event.transform);
         svg.selectAll('.markers').attr('transform', event.transform);
       });
@@ -879,6 +885,13 @@ class D3WorldMapElement extends HTMLElement {
           const badge = markerGroup.append('g')
             .attr('class', 'visit-badge')
             .attr('transform', 'translate(8, -20)');
+          
+          // Larger hit area for better hover detection
+          badge.append('circle')
+            .attr('class', 'visit-badge-bg')
+            .attr('r', 12)
+            .style('opacity', 0)
+            .style('pointer-events', 'all');
           
           badge.append('circle')
             .attr('class', 'visit-badge-bg')
