@@ -468,158 +468,126 @@ class D3WorldMapElement extends HTMLElement {
   }
 
   handleResize() {
-    // Debounce resize events
-    if (this.resizeTimeout) {
-      clearTimeout(this.resizeTimeout);
-    }
+  // Debounce resize events
+  if (this.resizeTimeout) {
+    clearTimeout(this.resizeTimeout);
+  }
+  
+  this.resizeTimeout = setTimeout(() => {
+    if (!this.mapLoaded) return;
     
-    this.resizeTimeout = setTimeout(() => {
-      if (!this.mapLoaded) return;
-      
-      console.log('🔄 Handling resize...');
-      
-      const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
-      const svg = window.d3.select(this.shadowRoot.getElementById('map'));
-      
-      // Get actual dimensions
-      const width = mapWrapper.clientWidth;
-      const height = mapWrapper.clientHeight;
-      
-      console.log('📐 New dimensions:', width, 'x', height);
-      
-      if (width === 0 || height === 0) {
-        console.log('⚠️ Invalid dimensions, skipping resize');
-        return;
-      }
-      
-      // Update SVG dimensions
-      svg
-        .attr('width', width)
-        .attr('height', height)
-        .attr('viewBox', `0 0 ${width} ${height}`);
-      
-      // Calculate scale to fill width completely (edge-to-edge)
-      const widthScale = width / 2.05;  // Fill width edge-to-edge
-      const heightScale = height / 1.05; // Ensure it fits vertically
-      const scale = Math.min(widthScale, heightScale);
-      
-      this.projection
-        .scale(scale)
-        .translate([width / 2, height / 2]);
-      
-      // Redraw countries
-      svg.selectAll('.country').attr('d', this.path);
-      
-      // Update markers if data exists
-      if (this.getAttribute('map-data')) {
-        this.updateMarkers();
-      }
-      
-      console.log('✅ Resize complete - scale:', scale.toFixed(2));
-    }, 250); // Debounce delay
-  }
-
-  loadScript(src) {
-    return new Promise((resolve, reject) => {
-      if (src.includes('d3.v7') && window.d3) {
-        resolve();
-        return;
-      }
-      if (src.includes('topojson') && window.topojson) {
-        resolve();
-        return;
-      }
-      
-      const existingScript = document.querySelector(`script[src="${src}"]`);
-      if (existingScript) {
-        existingScript.addEventListener('load', () => resolve());
-        existingScript.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)));
-        return;
-      }
-      
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      
-      script.onload = () => {
-        console.log(`✅ Script loaded: ${src}`);
-        resolve();
-      };
-      
-      script.onerror = () => {
-        reject(new Error(`Failed to load ${src}`));
-      };
-      
-      document.head.appendChild(script);
-    });
-  }
-
-  async initializeMap() {
-    console.log('🗺️ Initializing D3 map...');
+    console.log('🔄 Handling resize...');
     
     const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
     const svg = window.d3.select(this.shadowRoot.getElementById('map'));
-    const loading = this.shadowRoot.getElementById('loading');
     
     // Get actual dimensions
-    const width = mapWrapper.clientWidth || 1000;
-    const height = mapWrapper.clientHeight || 600;
+    const width = mapWrapper.clientWidth;
+    const height = mapWrapper.clientHeight;
     
-    console.log('📐 Initial map dimensions:', width, 'x', height);
+    console.log('📐 New dimensions:', width, 'x', height);
     
+    if (width === 0 || height === 0) {
+      console.log('⚠️ Invalid dimensions, skipping resize');
+      return;
+    }
+    
+    // Update SVG dimensions
     svg
       .attr('width', width)
       .attr('height', height)
-      .attr('viewBox', `0 0 ${width} ${height}`)
-      .attr('preserveAspectRatio', 'xMidYMid meet');
+      .attr('viewBox', `0 0 ${width} ${height}`);
     
-    // Calculate scale to fill width completely (edge-to-edge)
-    // Natural Earth projection has width ≈ 2 × scale
-    const widthScale = width / 2.05;  // Fills width edge-to-edge
-    const heightScale = height / 1.05; // Ensures vertical fit
+    // FIXED: Proper scale to show entire world
+    // Natural Earth projection: width ≈ 2.05 × scale, height ≈ scale
+    const widthScale = width / 2.1;   // Fit to width with small margin
+    const heightScale = height / 1.1; // Fit to height with small margin
     const scale = Math.min(widthScale, heightScale);
     
-    console.log('📏 Calculated scale:', scale);
-    
-    // Create projection with edge-to-edge width
-    this.projection = window.d3.geoNaturalEarth1()
+    this.projection
       .scale(scale)
       .translate([width / 2, height / 2]);
     
-    this.path = window.d3.geoPath().projection(this.projection);
+    // Redraw countries
+    svg.selectAll('.country').attr('d', this.path);
     
-    try {
-      console.log('📥 Fetching world map data...');
-      const worldData = await window.d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
-      console.log('✅ World data loaded');
-      
-      const countries = window.topojson.feature(worldData, worldData.objects.countries);
-      
-      svg.append('g')
-        .attr('class', 'countries')
-        .selectAll('path')
-        .data(countries.features)
-        .enter()
-        .append('path')
-        .attr('class', 'country')
-        .attr('d', this.path);
-      
-      this.markersGroup = svg.append('g').attr('class', 'markers');
-      
-      loading.style.display = 'none';
-      this.mapLoaded = true;
-      
-      const mapData = this.getAttribute('map-data');
-      if (mapData) {
-        console.log('📍 Initial map data found, rendering markers');
-        this.updateMarkers();
-      }
-      
-    } catch (error) {
-      console.error('❌ Error loading map data:', error);
-      loading.textContent = 'Error loading map data';
+    // Update markers if data exists
+    if (this.getAttribute('map-data')) {
+      this.updateMarkers();
     }
+    
+    console.log('✅ Resize complete - scale:', scale.toFixed(2));
+  }, 250);
+}
+
+async initializeMap() {
+  console.log('🗺️ Initializing D3 map...');
+  
+  const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
+  const svg = window.d3.select(this.shadowRoot.getElementById('map'));
+  const loading = this.shadowRoot.getElementById('loading');
+  
+  // Get actual dimensions
+  const width = mapWrapper.clientWidth || 1000;
+  const height = mapWrapper.clientHeight || 600;
+  
+  console.log('📐 Initial map dimensions:', width, 'x', height);
+  
+  svg
+    .attr('width', width)
+    .attr('height', height)
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+  
+  // FIXED: Proper scale to show entire world
+  // Natural Earth projection bounds:
+  // - Width in projection space ≈ 2.05 × scale
+  // - Height in projection space ≈ scale
+  const widthScale = width / 2.1;   // Fit entire world width with small margin
+  const heightScale = height / 1.1; // Fit entire world height with small margin
+  const scale = Math.min(widthScale, heightScale);
+  
+  console.log('📏 Calculated scale:', scale);
+  
+  // Create projection centered properly
+  this.projection = window.d3.geoNaturalEarth1()
+    .scale(scale)
+    .translate([width / 2, height / 2]);
+  
+  this.path = window.d3.geoPath().projection(this.projection);
+  
+  try {
+    console.log('📥 Fetching world map data...');
+    const worldData = await window.d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    console.log('✅ World data loaded');
+    
+    const countries = window.topojson.feature(worldData, worldData.objects.countries);
+    
+    svg.append('g')
+      .attr('class', 'countries')
+      .selectAll('path')
+      .data(countries.features)
+      .enter()
+      .append('path')
+      .attr('class', 'country')
+      .attr('d', this.path);
+    
+    this.markersGroup = svg.append('g').attr('class', 'markers');
+    
+    loading.style.display = 'none';
+    this.mapLoaded = true;
+    
+    const mapData = this.getAttribute('map-data');
+    if (mapData) {
+      console.log('📍 Initial map data found, rendering markers');
+      this.updateMarkers();
+    }
+    
+  } catch (error) {
+    console.error('❌ Error loading map data:', error);
+    loading.textContent = 'Error loading map data';
   }
+}
 
   updateMarkers() {
     if (!this.mapLoaded) {
