@@ -5,25 +5,11 @@ class VisitorMapElement extends HTMLElement {
     this.mapData = [];
     this.isD3Loaded = false;
     this.worldData = null;
-    
-    // Create a ResizeObserver to watch for dimension changes
-    this.resizeObserver = new ResizeObserver(() => {
-      if (this.isD3Loaded && this.worldData) {
-        this.renderMap();
-      }
-    });
   }
 
   connectedCallback() {
     console.log('✅ VisitorMapElement: Connected');
     this.loadD3();
-    // Start watching this element for size changes
-    this.resizeObserver.observe(this);
-  }
-
-  disconnectedCallback() {
-    // Cleanup observer when element is removed
-    this.resizeObserver.disconnect();
   }
 
   static get observedAttributes() {
@@ -65,23 +51,35 @@ class VisitorMapElement extends HTMLElement {
     
     this.shadowRoot.innerHTML = `
       <style>
-        :host { display: block; width: 100%; height: 100%; font-family: sans-serif; }
+        :host { display: block; width: 100%; height: 100%; }
+        
+        /* 1. Ensure container fills the Wix Widget */
         .map-container { 
           width: 100%; 
           height: 100%; 
           background: #f0f4f8; 
           position: relative; 
-          overflow: hidden; 
+          display: flex;
+          justify-content: center;
+          align-items: center;
         }
-        svg { display: block; width: 100%; height: 100%; }
+
+        /* 2. SVG Responsiveness Strategy */
+        svg { 
+          display: block; 
+          width: 100%; 
+          height: 100%; 
+          /* This ensures the map scales proportionally without distortion */
+          max-height: 100%; 
+        }
         
         .country { fill: #cbd5e0; stroke: #fff; stroke-width: 0.5px; transition: fill 0.2s; }
         .country:hover { fill: #a0aec0; }
         
         .marker { cursor: pointer; transition: transform 0.2s; }
         .marker:hover { transform: scale(1.5); }
-        .marker-recent { fill: #48bb78; stroke: #fff; stroke-width: 1.5px; }
-        .marker-old { fill: #667eea; stroke: #fff; stroke-width: 1.5px; }
+        .marker-recent { fill: #48bb78; stroke: #fff; stroke-width: 1px; }
+        .marker-old { fill: #667eea; stroke: #fff; stroke-width: 1px; }
 
         .tooltip {
           position: absolute;
@@ -100,19 +98,20 @@ class VisitorMapElement extends HTMLElement {
         .stats {
           position: absolute; top: 10px; right: 10px;
           background: rgba(255, 255, 255, 0.9); 
-          padding: 10px 15px;
+          padding: 8px 12px;
           border-radius: 8px; 
           box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          font-size: 12px;
+          font-family: sans-serif; font-size: 11px;
           backdrop-filter: blur(4px);
         }
-        .stats h3 { margin: 0 0 5px 0; font-size: 13px; color: #2d3748; }
-        .stat-row { display: flex; justify-content: space-between; gap: 15px; margin: 3px 0; color: #718096; }
+        .stats h3 { margin: 0 0 5px 0; font-size: 12px; color: #2d3748; }
+        .stat-row { display: flex; justify-content: space-between; gap: 10px; margin: 2px 0; color: #718096; }
         .stat-val { font-weight: bold; color: #2d3748; }
       </style>
       
       <div class="map-container" id="container">
-        <svg id="viz"></svg>
+        <svg id="viz" viewBox="0 0 960 500" preserveAspectRatio="xMidYMid meet"></svg>
+        
         <div class="tooltip" id="tooltip"></div>
         <div class="stats" id="statsPanel">
            <h3>Visitor Stats</h3>
@@ -134,38 +133,36 @@ class VisitorMapElement extends HTMLElement {
   renderMap() {
     if (!this.worldData || !window.d3) return;
 
-    // 1. Get the CURRENT exact size of the container
-    const container = this.shadowRoot.getElementById('container');
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-
-    // If size is 0 (hidden or loading), try again later
-    if (width === 0 || height === 0) return;
+    // Use specific logical dimensions (Standard D3 aspect ratio)
+    const logicalWidth = 960;
+    const logicalHeight = 500;
 
     const svg = d3.select(this.shadowRoot.getElementById('viz'));
-    svg.selectAll("*").remove(); // Wipe canvas clean for redraw
+    svg.selectAll("*").remove(); 
 
-    // 2. Setup Responsive Projection
-    // This fits the world map into whatever box size we currently have
+    // --- PROJECTION ---
+    // fitSize ensures the map fills our logical 960x500 box perfectly
+    const countriesObj = topojson.feature(this.worldData, this.worldData.objects.countries);
+    
     const projection = d3.geoMercator()
-      .fitSize([width, height], topojson.feature(this.worldData, this.worldData.objects.countries));
+      .fitSize([logicalWidth, logicalHeight], countriesObj);
       
     const path = d3.geoPath().projection(projection);
 
-    // 3. Draw Countries
-    const countries = topojson.feature(this.worldData, this.worldData.objects.countries);
+    // --- DRAWING ---
     const g = svg.append("g");
 
+    // Draw Countries
     g.selectAll("path")
-      .data(countries.features)
+      .data(countriesObj.features)
       .enter().append("path")
       .attr("d", path)
       .attr("class", "country");
 
-    // 4. Draw Markers
+    // --- MARKERS ---
     const tooltip = d3.select(this.shadowRoot.getElementById('tooltip'));
     
-    // Calculate Stats
+    // Stats
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     let recent = 0;
@@ -177,10 +174,9 @@ class VisitorMapElement extends HTMLElement {
     g.selectAll("circle")
       .data(validPoints)
       .enter().append("circle")
-      // D3 uses [Longitude, Latitude] order
       .attr("cx", d => projection([d.lng, d.lat])[0]) 
       .attr("cy", d => projection([d.lng, d.lat])[1])
-      .attr("r", Math.max(3, width / 200)) // Responsive dot size!
+      .attr("r", 4) // Fixed size relative to 960px width
       .attr("class", d => {
         const isRecent = d.timestamp && new Date(d.timestamp) > oneDayAgo;
         if(isRecent) recent++;
@@ -191,29 +187,25 @@ class VisitorMapElement extends HTMLElement {
                .html(`<strong>${d.title || 'Visitor'}</strong><br/>${d.time || ''}`);
       })
       .on("mousemove", (event) => {
+        // D3 pointer gives coordinates relative to the SVG 960x500 canvas
+        // We need coordinates relative to the container for the tooltip
+        const container = this.shadowRoot.getElementById('container');
         const [x, y] = d3.pointer(event, container);
         
-        // Prevent tooltip from going off right edge
-        const tooltipWidth = 150;
-        let leftPos = x + 10;
-        if (x + tooltipWidth > width) leftPos = x - tooltipWidth - 10;
-
-        tooltip.style("left", leftPos + "px")
+        tooltip.style("left", (x + 10) + "px")
                .style("top", (y - 20) + "px");
       })
       .on("mouseout", () => {
         tooltip.style("opacity", 0);
       });
 
-    // Update Stats
     this.shadowRoot.getElementById('count-total').innerText = validPoints.length;
     this.shadowRoot.getElementById('count-recent').innerText = recent;
 
-    // 5. Add Responsive Zoom
+    // --- ZOOM BEHAVIOR ---
     const zoom = d3.zoom()
       .scaleExtent([1, 8])
-      // Restrict panning so user can't lose the map
-      .translateExtent([[0, 0], [width, height]])
+      .translateExtent([[0, 0], [logicalWidth, logicalHeight]])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
       });
