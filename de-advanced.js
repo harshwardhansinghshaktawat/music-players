@@ -4,7 +4,7 @@ class D3WorldMapElement extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this.mapLoaded = false;
     this.handleResize = this.handleResize.bind(this);
-    this.tooltipTimeout = null;
+    this.activeTooltip = null;
     console.log('✅ D3WorldMapElement: Constructor called');
   }
 
@@ -15,7 +15,6 @@ class D3WorldMapElement extends HTMLElement {
 
   disconnectedCallback() {
     window.removeEventListener('resize', this.handleResize);
-    if (this.tooltipTimeout) clearTimeout(this.tooltipTimeout);
   }
 
   static get observedAttributes() {
@@ -24,6 +23,7 @@ class D3WorldMapElement extends HTMLElement {
 
   attributeChangedCallback(name, oldValue, newValue) {
     if (name === 'map-data' && oldValue !== newValue && this.mapLoaded) {
+      console.log('🔄 Map data changed, updating markers');
       this.updateMarkers();
     }
   }
@@ -471,6 +471,7 @@ class D3WorldMapElement extends HTMLElement {
       
       const mapData = this.getAttribute('map-data');
       if (mapData) {
+        console.log('📍 Initial map data found, rendering markers');
         this.updateMarkers();
       }
       
@@ -487,16 +488,26 @@ class D3WorldMapElement extends HTMLElement {
     }
     
     const mapData = this.getAttribute('map-data');
-    if (!mapData) return;
+    if (!mapData) {
+      console.log('⚠️ No map data attribute');
+      return;
+    }
     
     try {
       const locations = JSON.parse(mapData);
-      console.log('✅ Updating markers:', locations.length);
+      console.log('\n========== UPDATING MARKERS ==========');
+      console.log('📍 Total locations:', locations.length);
+      
+      if (locations.length === 0) {
+        console.log('⚠️ No locations to display');
+        return;
+      }
       
       const tooltip = this.shadowRoot.getElementById('tooltip');
       const container = this.shadowRoot.getElementById('container');
       
       this.markersGroup.selectAll('*').remove();
+      console.log('🧹 Cleared old markers');
       
       // Calculate statistics
       const now = new Date();
@@ -504,18 +515,27 @@ class D3WorldMapElement extends HTMLElement {
       let recentCount = 0;
       const countries = new Set();
       
-      // Group locations by coordinates to handle overlapping
+      // Group locations by proximity to handle overlapping
       const locationGroups = new Map();
       
-      locations.forEach(location => {
-        if (typeof location.lat !== 'number' || typeof location.lng !== 'number') return;
-        if (isNaN(location.lat) || isNaN(location.lng)) return;
+      locations.forEach((location, index) => {
+        if (typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+          console.error(`❌ Invalid location ${index}:`, location);
+          return;
+        }
+        if (isNaN(location.lat) || isNaN(location.lng)) {
+          console.error(`❌ NaN in location ${index}:`, location);
+          return;
+        }
         
         const coords = this.projection([location.lng, location.lat]);
-        if (!coords) return;
+        if (!coords) {
+          console.error(`❌ Projection failed for location ${index}:`, location);
+          return;
+        }
         
-        // Round coordinates to group nearby markers
-        const key = `${Math.round(coords[0])},${Math.round(coords[1])}`;
+        // Round coordinates to group nearby markers (within ~10 pixels)
+        const key = `${Math.round(coords[0] / 10) * 10},${Math.round(coords[1] / 10) * 10}`;
         
         if (!locationGroups.has(key)) {
           locationGroups.set(key, []);
@@ -528,24 +548,25 @@ class D3WorldMapElement extends HTMLElement {
         if (location.country) countries.add(location.country);
       });
       
+      console.log('📦 Grouped into', locationGroups.size, 'clusters');
+      
       // Add markers with offset for overlapping locations
+      let markerCount = 0;
       locationGroups.forEach((group, key) => {
-        const baseCoords = group[0].coords;
-        
         group.forEach((item, index) => {
           const { location, coords } = item;
           
-          // Add small offset for overlapping markers
+          // Add small circular offset for overlapping markers
           const angle = (index / group.length) * 2 * Math.PI;
-          const offset = group.length > 1 ? 8 : 0;
-          const x = coords[0] + Math.cos(angle) * offset;
-          const y = coords[1] + Math.sin(angle) * offset;
+          const radius = group.length > 1 ? 8 : 0;
+          const x = coords[0] + Math.cos(angle) * radius;
+          const y = coords[1] + Math.sin(angle) * radius;
           
           const isRecent = location.lastVisit && new Date(location.lastVisit) > oneDayAgo;
           
           // Add glow effect for recent visitors
           if (isRecent) {
-            const glow = this.markersGroup.append('circle')
+            this.markersGroup.append('circle')
               .attr('cx', x)
               .attr('cy', y)
               .attr('r', 7)
@@ -561,11 +582,16 @@ class D3WorldMapElement extends HTMLElement {
             .attr('class', `marker ${isRecent ? 'marker-recent' : 'marker-old'}`)
             .attr('data-id', location._id);
           
-          // Tooltip events with delay to prevent flickering
+          // FIXED: Tooltip events with debouncing to prevent flickering
+          let enterTimeout;
+          let leaveTimeout;
+          
           marker.on('mouseenter', () => {
-            if (this.tooltipTimeout) clearTimeout(this.tooltipTimeout);
+            clearTimeout(leaveTimeout);
+            clearTimeout(enterTimeout);
             
-            this.tooltipTimeout = setTimeout(() => {
+            enterTimeout = setTimeout(() => {
+              this.activeTooltip = location._id;
               tooltip.innerHTML = `
                 <strong>${location.title || 'Visitor'}</strong><br>
                 ${location.lastVisit || 'Unknown'}<br>
@@ -574,17 +600,18 @@ class D3WorldMapElement extends HTMLElement {
                 </div>
               `;
               tooltip.classList.add('active');
-            }, 150);
+            }, 100);
           });
           
           marker.on('mousemove', (event) => {
+            if (this.activeTooltip !== location._id) return;
+            
             const rect = container.getBoundingClientRect();
             const left = event.clientX - rect.left;
             const top = event.clientY - rect.top;
             
-            // Adjust tooltip position to stay in viewport
             const tooltipWidth = 200;
-            const tooltipHeight = 80;
+            const tooltipHeight = 100;
             
             let finalLeft = left + 15;
             let finalTop = top + 15;
@@ -601,21 +628,30 @@ class D3WorldMapElement extends HTMLElement {
           });
           
           marker.on('mouseleave', () => {
-            if (this.tooltipTimeout) clearTimeout(this.tooltipTimeout);
+            clearTimeout(enterTimeout);
+            clearTimeout(leaveTimeout);
             
-            this.tooltipTimeout = setTimeout(() => {
-              tooltip.classList.remove('active');
+            leaveTimeout = setTimeout(() => {
+              if (this.activeTooltip === location._id) {
+                tooltip.classList.remove('active');
+                this.activeTooltip = null;
+              }
             }, 100);
           });
+          
+          markerCount++;
         });
       });
+      
+      console.log('✅ Rendered markers:', markerCount);
+      console.log('📊 Recent (24h):', recentCount);
+      console.log('🌍 Countries:', countries.size);
+      console.log('======================================\n');
       
       // Update statistics
       this.shadowRoot.getElementById('totalCount').textContent = locations.length;
       this.shadowRoot.getElementById('countryCount').textContent = countries.size;
       this.shadowRoot.getElementById('recentCount').textContent = recentCount;
-      
-      console.log('📊 Stats - Total:', locations.length, '| Recent:', recentCount, '| Countries:', countries.size);
       
     } catch (error) {
       console.error('❌ Error updating markers:', error);
