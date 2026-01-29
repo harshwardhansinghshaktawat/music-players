@@ -49,6 +49,14 @@ class D3WorldMapElement extends HTMLElement {
           overflow: hidden;
           border-radius: 12px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          display: flex;
+          flex-direction: column;
+        }
+        
+        .map-wrapper {
+          flex: 1;
+          position: relative;
+          overflow: hidden;
         }
         
         #map {
@@ -189,79 +197,71 @@ class D3WorldMapElement extends HTMLElement {
           font-weight: 600;
         }
         
-        .stats-panel {
-          position: absolute;
-          top: 20px;
-          right: 20px;
+        /* Bottom Stats Bar */
+        .bottom-stats {
           background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
-          padding: 20px 24px;
-          border-radius: 16px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-          z-index: 10;
+          padding: 16px 24px;
+          display: flex;
+          justify-content: space-around;
+          align-items: center;
+          gap: 20px;
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.3);
+          border-top: 1px solid rgba(255, 255, 255, 0.3);
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+          flex-wrap: wrap;
         }
         
-        .stats-panel h3 {
-          margin: 0 0 14px 0;
-          font-size: 16px;
-          color: #2d3748;
-          font-weight: 700;
+        .stats-group {
           display: flex;
+          gap: 32px;
           align-items: center;
-          gap: 8px;
+          flex: 1;
+          justify-content: center;
         }
         
-        .stat-item {
+        .stat-card {
           display: flex;
-          justify-content: space-between;
+          flex-direction: column;
           align-items: center;
-          margin: 10px 0;
-          font-size: 14px;
-          padding: 8px 0;
-          border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        }
-        
-        .stat-item:last-child {
-          border-bottom: none;
+          gap: 4px;
+          min-width: 100px;
         }
         
         .stat-label {
           color: #718096;
-          font-weight: 500;
-          margin-right: 16px;
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
         
         .stat-value {
-          font-weight: 700;
-          color: #2d3748;
-          font-size: 18px;
+          font-size: 28px;
+          font-weight: 800;
           background: linear-gradient(135deg, #667eea, #764ba2);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
+          line-height: 1;
         }
         
-        .legend {
-          position: absolute;
-          bottom: 20px;
-          left: 20px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
-          padding: 16px 20px;
-          border-radius: 16px;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-          z-index: 10;
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.3);
+        .stat-divider {
+          width: 1px;
+          height: 40px;
+          background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.1), rgba(0,0,0,0));
+        }
+        
+        .legend-group {
+          display: flex;
+          gap: 24px;
+          align-items: center;
         }
         
         .legend-item {
           display: flex;
           align-items: center;
-          margin: 8px 0;
-          font-size: 13px;
+          gap: 8px;
+          font-size: 12px;
           font-weight: 500;
           color: #4a5568;
         }
@@ -269,10 +269,18 @@ class D3WorldMapElement extends HTMLElement {
         .legend-icon {
           width: 16px;
           height: 20px;
-          margin-right: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
+        }
+        
+        .map-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 700;
+          color: #2d3748;
         }
         
         .loading {
@@ -288,95 +296,134 @@ class D3WorldMapElement extends HTMLElement {
         }
         
         /* Responsive Design */
-        @media (max-width: 768px) {
-          .stats-panel {
-            top: 10px;
-            right: 10px;
+        @media (max-width: 1024px) {
+          .bottom-stats {
             padding: 12px 16px;
           }
           
-          .stats-panel h3 {
-            font-size: 14px;
+          .stats-group {
+            gap: 20px;
           }
           
-          .stat-item {
-            font-size: 12px;
-            margin: 6px 0;
+          .stat-card {
+            min-width: 80px;
           }
           
           .stat-value {
-            font-size: 16px;
+            font-size: 24px;
           }
           
-          .legend {
-            bottom: 10px;
-            left: 10px;
-            padding: 12px 16px;
-          }
-          
-          .legend-item {
+          .stat-label {
             font-size: 11px;
-            margin: 6px 0;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .bottom-stats {
+            flex-direction: column;
+            padding: 12px;
+            gap: 12px;
+          }
+          
+          .stats-group {
+            width: 100%;
+            gap: 16px;
+          }
+          
+          .stat-divider {
+            display: none;
+          }
+          
+          .legend-group {
+            width: 100%;
+            justify-content: center;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+          }
+          
+          .stat-card {
+            min-width: 70px;
+          }
+          
+          .stat-value {
+            font-size: 20px;
+          }
+          
+          .map-title {
+            display: none;
           }
         }
       </style>
 
-      <div class="map-container" id="container">
-        <div class="loading" id="loading">Loading world map...</div>
-        <svg id="map">
-          <defs>
-            <!-- Location Pin Icon - Recent (Green) -->
-            <g id="pin-recent">
-              <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
-                    class="marker-pin-recent"/>
-            </g>
-            
-            <!-- Location Pin Icon - Old (Blue) -->
-            <g id="pin-old">
-              <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
-                    class="marker-pin-old"/>
-            </g>
-          </defs>
-        </svg>
+      <div class="map-container">
+        <div class="map-wrapper" id="mapWrapper">
+          <div class="loading" id="loading">Loading world map...</div>
+          <svg id="map">
+            <defs>
+              <!-- Location Pin Icon - Recent (Green) -->
+              <g id="pin-recent">
+                <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                      class="marker-pin-recent"/>
+              </g>
+              
+              <!-- Location Pin Icon - Old (Blue) -->
+              <g id="pin-old">
+                <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                      class="marker-pin-old"/>
+              </g>
+            </defs>
+          </svg>
+          <div class="tooltip" id="tooltip"></div>
+        </div>
         
-        <div class="stats-panel">
-          <h3>🌍 Live Visitor Map</h3>
-          <div class="stat-item">
-            <span class="stat-label">Cities</span>
-            <span class="stat-value" id="cityCount">0</span>
+        <div class="bottom-stats">
+          <div class="map-title">
+            🌍 Live Visitor Map
           </div>
-          <div class="stat-item">
-            <span class="stat-label">Total Visits</span>
-            <span class="stat-value" id="totalVisits">0</span>
+          
+          <div class="stats-group">
+            <div class="stat-card">
+              <div class="stat-value" id="cityCount">0</div>
+              <div class="stat-label">Cities</div>
+            </div>
+            
+            <div class="stat-divider"></div>
+            
+            <div class="stat-card">
+              <div class="stat-value" id="totalVisits">0</div>
+              <div class="stat-label">Total Visits</div>
+            </div>
+            
+            <div class="stat-divider"></div>
+            
+            <div class="stat-card">
+              <div class="stat-value" id="recentCount">0</div>
+              <div class="stat-label">Last 24 Hours</div>
+            </div>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">Last 24 Hours</span>
-            <span class="stat-value" id="recentCount">0</span>
+          
+          <div class="legend-group">
+            <div class="legend-item">
+              <div class="legend-icon">
+                <svg width="16" height="20" viewBox="0 0 24 24">
+                  <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                        fill="#48bb78"/>
+                </svg>
+              </div>
+              <span>Recent</span>
+            </div>
+            
+            <div class="legend-item">
+              <div class="legend-icon">
+                <svg width="16" height="20" viewBox="0 0 24 24">
+                  <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                        fill="#4299e1"/>
+                </svg>
+              </div>
+              <span>Earlier</span>
+            </div>
           </div>
         </div>
-
-        <div class="legend">
-          <div class="legend-item">
-            <div class="legend-icon">
-              <svg width="16" height="20" viewBox="0 0 24 24">
-                <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
-                      fill="#48bb78"/>
-              </svg>
-            </div>
-            <span>Recent (24h)</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-icon">
-              <svg width="16" height="20" viewBox="0 0 24 24">
-                <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
-                      fill="#4299e1"/>
-              </svg>
-            </div>
-            <span>Earlier Visits</span>
-          </div>
-        </div>
-
-        <div class="tooltip" id="tooltip"></div>
       </div>
     `;
     
@@ -419,17 +466,18 @@ class D3WorldMapElement extends HTMLElement {
   handleResize() {
     if (!this.mapLoaded) return;
     
-    const container = this.shadowRoot.getElementById('container');
+    const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
     const svg = window.d3.select(this.shadowRoot.getElementById('map'));
     
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    const width = mapWrapper.clientWidth;
+    const height = mapWrapper.clientHeight;
     
     svg.attr('width', width).attr('height', height);
     
+    // Increase scale for better fill - adjusted for better fit
     this.projection
-      .scale(width / 6)
-      .translate([width / 2, height / 2]);
+      .scale(width / 5.5)
+      .translate([width / 2, height / 1.8]);
     
     svg.selectAll('.country').attr('d', this.path);
     
@@ -476,12 +524,14 @@ class D3WorldMapElement extends HTMLElement {
   async initializeMap() {
     console.log('🗺️ Initializing D3 map...');
     
-    const container = this.shadowRoot.getElementById('container');
+    const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
     const svg = window.d3.select(this.shadowRoot.getElementById('map'));
     const loading = this.shadowRoot.getElementById('loading');
     
-    const width = container.clientWidth || 1000;
-    const height = container.clientHeight || 600;
+    const width = mapWrapper.clientWidth || 1000;
+    const height = mapWrapper.clientHeight || 600;
+    
+    console.log('Map dimensions:', width, 'x', height);
     
     svg
       .attr('width', width)
@@ -489,9 +539,10 @@ class D3WorldMapElement extends HTMLElement {
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'xMidYMid meet');
     
+    // Larger scale and adjusted translate for better fill
     this.projection = window.d3.geoNaturalEarth1()
-      .scale(width / 6)
-      .translate([width / 2, height / 2]);
+      .scale(width / 5.5)  // Increased from /6 for larger map
+      .translate([width / 2, height / 1.8]);  // Adjusted Y to move map up slightly
     
     this.path = window.d3.geoPath().projection(this.projection);
     
@@ -551,7 +602,7 @@ class D3WorldMapElement extends HTMLElement {
       }
       
       const tooltip = this.shadowRoot.getElementById('tooltip');
-      const container = this.shadowRoot.getElementById('container');
+      const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
       
       this.markersGroup.selectAll('*').remove();
       console.log('🧹 Cleared old markers');
@@ -626,7 +677,7 @@ class D3WorldMapElement extends HTMLElement {
             .text(location.totalVisits > 99 ? '99+' : location.totalVisits);
         }
         
-        // Tooltip events - NO TRANSFORM on hover to prevent fluctuation
+        // Tooltip events
         let enterTimeout;
         let leaveTimeout;
         
@@ -659,7 +710,7 @@ class D3WorldMapElement extends HTMLElement {
         markerGroup.on('mousemove', (event) => {
           if (this.activeTooltip !== index) return;
           
-          const rect = container.getBoundingClientRect();
+          const rect = mapWrapper.getBoundingClientRect();
           const left = event.clientX - rect.left;
           const top = event.clientY - rect.top;
           
