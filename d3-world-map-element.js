@@ -3,12 +3,17 @@ class D3WorldMapElement extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.mapLoaded = false;
+    this.handleResize = this.handleResize.bind(this);
     console.log('✅ D3WorldMapElement: Constructor called');
   }
 
   connectedCallback() {
     console.log('✅ D3WorldMapElement: Connected to DOM');
     this.render();
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener('resize', this.handleResize);
   }
 
   static get observedAttributes() {
@@ -31,10 +36,12 @@ class D3WorldMapElement extends HTMLElement {
           display: block;
           width: 100%;
           height: 100%;
+          min-height: 500px;
         }
         .map-container {
           width: 100%;
           height: 100%;
+          min-height: 500px;
           position: relative;
           background: #f0f4f8;
           overflow: hidden;
@@ -42,6 +49,7 @@ class D3WorldMapElement extends HTMLElement {
         #map {
           width: 100%;
           height: 100%;
+          display: block;
         }
         .country {
           fill: #e2e8f0;
@@ -190,45 +198,105 @@ class D3WorldMapElement extends HTMLElement {
     try {
       console.log('📦 Loading D3.js library...');
       
-      // Load D3.js
-      await this.loadScript('https://d3js.org/d3.v7.min.js');
+      // Wait for D3.js to load
+      if (!window.d3) {
+        await this.loadScript('https://d3js.org/d3.v7.min.js');
+        // Wait a bit for D3 to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      if (!window.d3) {
+        throw new Error('D3.js failed to load');
+      }
       console.log('✅ D3.js loaded');
       
-      // Load TopoJSON (lightweight world map data)
-      await this.loadScript('https://unpkg.com/topojson@3');
+      // Wait for TopoJSON to load
+      if (!window.topojson) {
+        await this.loadScript('https://unpkg.com/topojson@3');
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      if (!window.topojson) {
+        throw new Error('TopoJSON failed to load');
+      }
       console.log('✅ TopoJSON loaded');
       
       // Initialize map
       await this.initializeMap();
       
+      // Add resize handler
+      window.addEventListener('resize', this.handleResize);
+      
     } catch (error) {
       console.error('❌ Error loading D3:', error);
-      this.shadowRoot.getElementById('loading').textContent = 'Error loading map';
+      this.shadowRoot.getElementById('loading').textContent = 'Error loading map libraries';
+    }
+  }
+
+  handleResize() {
+    if (!this.mapLoaded) return;
+    
+    const container = this.shadowRoot.getElementById('container');
+    const svg = window.d3.select(this.shadowRoot.getElementById('map'));
+    
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    svg.attr('width', width).attr('height', height);
+    
+    this.projection
+      .scale(width / 6)
+      .translate([width / 2, height / 2]);
+    
+    // Redraw countries
+    svg.selectAll('.country').attr('d', this.path);
+    
+    // Update markers if they exist
+    if (this.getAttribute('map-data')) {
+      this.updateMarkers();
     }
   }
 
   loadScript(src) {
     return new Promise((resolve, reject) => {
-      // Check if script already loaded in main document
-      if (window.d3 && src.includes('d3.v7')) {
-        console.log('D3 already loaded in window');
+      // Check if already loaded
+      if (src.includes('d3.v7') && window.d3) {
+        console.log('D3 already loaded');
         resolve();
         return;
       }
-      if (window.topojson && src.includes('topojson')) {
-        console.log('TopoJSON already loaded in window');
+      if (src.includes('topojson') && window.topojson) {
+        console.log('TopoJSON already loaded');
         resolve();
         return;
       }
       
+      // Check if script tag already exists
+      const existingScript = document.querySelector(`script[src="${src}"]`);
+      if (existingScript) {
+        console.log('Script tag exists, waiting for load...');
+        existingScript.addEventListener('load', () => resolve());
+        existingScript.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)));
+        return;
+      }
+      
+      // Create new script
       const script = document.createElement('script');
       script.src = src;
+      script.async = true;
+      
       script.onload = () => {
-        console.log(`✅ Loaded: ${src}`);
+        console.log(`✅ Script loaded: ${src}`);
         resolve();
       };
-      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      
+      script.onerror = () => {
+        console.error(`❌ Failed to load: ${src}`);
+        reject(new Error(`Failed to load ${src}`));
+      };
+      
       document.head.appendChild(script);
+      console.log(`📥 Loading script: ${src}`);
     });
   }
 
@@ -240,12 +308,18 @@ class D3WorldMapElement extends HTMLElement {
     const loading = this.shadowRoot.getElementById('loading');
     
     // Get container dimensions
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    const width = container.clientWidth || 1000;
+    const height = container.clientHeight || 600;
     
     console.log('Container dimensions:', width, 'x', height);
     
-    svg.attr('width', width).attr('height', height);
+    // Set SVG dimensions with viewBox for responsiveness
+    const aspect = width / height;
+    svg
+      .attr('width', width)
+      .attr('height', height)
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
     
     // Create projection - using Natural Earth for better world view
     this.projection = window.d3.geoNaturalEarth1()
