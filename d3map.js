@@ -59,6 +59,8 @@ class D3WorldMapElement extends HTMLElement {
           position: relative;
           overflow: hidden;
           min-height: 0;
+          display: flex;
+          flex-direction: column;
         }
         
         #map {
@@ -66,6 +68,9 @@ class D3WorldMapElement extends HTMLElement {
           height: 100%;
           display: block;
           cursor: default;
+          flex: 1;
+          vertical-align: top;
+          line-height: 0;
         }
         
         .country {
@@ -166,6 +171,8 @@ class D3WorldMapElement extends HTMLElement {
           border: 1px solid rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(10px);
           min-width: 200px;
+          margin: 0;
+          line-height: 1.4;
         }
         
         .tooltip.active {
@@ -350,6 +357,9 @@ class D3WorldMapElement extends HTMLElement {
           font-size: 18px;
           font-weight: 600;
           text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+          margin: 0;
+          padding: 0;
+          line-height: 1;
         }
         
         /* Responsive Design */
