@@ -498,11 +498,8 @@ class D3WorldMapElement extends HTMLElement {
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`);
       
-      // FIXED: Proper scale to show entire world map
-      // Natural Earth projection: width ≈ 2.05 × scale, height ≈ scale
-      const widthScale = width / 2.1;   // Fit to width with small margin
-      const heightScale = height / 1.1; // Fit to height with small margin
-      const scale = Math.min(widthScale, heightScale);
+      // Recalculate projection with proper centering
+      const scale = Math.min(width / 6.5, height / 4);
       
       this.projection
         .scale(scale)
@@ -516,8 +513,8 @@ class D3WorldMapElement extends HTMLElement {
         this.updateMarkers();
       }
       
-      console.log('✅ Resize complete - scale:', scale.toFixed(2));
-    }, 250);
+      console.log('✅ Resize complete');
+    }, 250); // Debounce delay
   }
 
   loadScript(src) {
@@ -574,17 +571,10 @@ class D3WorldMapElement extends HTMLElement {
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'xMidYMid meet');
     
-    // FIXED: Proper scale to show entire world map
-    // Natural Earth projection bounds:
-    // - Width in projection space ≈ 2.05 × scale
-    // - Height in projection space ≈ scale
-    const widthScale = width / 2.1;   // Fit entire world width with small margin
-    const heightScale = height / 1.1; // Fit entire world height with small margin
-    const scale = Math.min(widthScale, heightScale);
+    // Calculate scale based on dimensions - keeps map properly sized
+    const scale = Math.min(width / 6.5, height / 4);
     
-    console.log('📏 Calculated scale:', scale);
-    
-    // Create projection centered properly
+    // Create projection with proper centering
     this.projection = window.d3.geoNaturalEarth1()
       .scale(scale)
       .translate([width / 2, height / 2]);
