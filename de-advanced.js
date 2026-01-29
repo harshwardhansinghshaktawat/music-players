@@ -70,52 +70,40 @@ class D3WorldMapElement extends HTMLElement {
           opacity: 1;
         }
         
-        .marker {
+        .location-marker {
           cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+          transition: opacity 0.3s ease;
+          transform-origin: center bottom;
+          transform-box: fill-box;
         }
         
-        .marker:hover {
-          transform: scale(1.3);
-          filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+        .location-marker:hover {
+          opacity: 0.8;
         }
         
-        .marker-recent {
+        .marker-pin-recent {
           fill: #48bb78;
-          stroke: white;
-          stroke-width: 2.5;
-          animation: pulse 2s ease-in-out infinite;
+          filter: drop-shadow(0 4px 8px rgba(72, 187, 120, 0.5));
         }
         
-        .marker-old {
+        .marker-pin-old {
           fill: #4299e1;
-          stroke: white;
-          stroke-width: 2.5;
+          filter: drop-shadow(0 4px 8px rgba(66, 153, 225, 0.5));
         }
         
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 0.8;
-            transform: scale(1.1);
-          }
-        }
-        
-        .marker-glow {
+        .marker-pulse {
           fill: none;
           stroke: currentColor;
           stroke-width: 2;
           opacity: 0;
-          animation: glow 2s ease-out infinite;
+          transform-origin: center bottom;
+          transform-box: fill-box;
+          animation: pulse-ring 2s ease-out infinite;
         }
         
-        @keyframes glow {
+        @keyframes pulse-ring {
           0% {
-            r: 7;
+            r: 4;
             opacity: 0.8;
           }
           100% {
@@ -124,11 +112,30 @@ class D3WorldMapElement extends HTMLElement {
           }
         }
         
+        .visit-badge {
+          pointer-events: none;
+        }
+        
+        .visit-badge-bg {
+          fill: white;
+          stroke: #2d3748;
+          stroke-width: 1;
+        }
+        
+        .visit-badge-text {
+          fill: #2d3748;
+          font-size: 10px;
+          font-weight: 700;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+          text-anchor: middle;
+          dominant-baseline: middle;
+        }
+        
         .tooltip {
           position: absolute;
           background: linear-gradient(135deg, rgba(26, 32, 44, 0.98), rgba(45, 55, 72, 0.98));
           color: white;
-          padding: 12px 16px;
+          padding: 14px 18px;
           border-radius: 10px;
           font-size: 13px;
           pointer-events: none;
@@ -140,6 +147,7 @@ class D3WorldMapElement extends HTMLElement {
           box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
           border: 1px solid rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(10px);
+          min-width: 200px;
         }
         
         .tooltip.active {
@@ -149,21 +157,36 @@ class D3WorldMapElement extends HTMLElement {
         
         .tooltip strong {
           display: block;
-          font-size: 14px;
-          margin-bottom: 4px;
+          font-size: 15px;
+          margin-bottom: 6px;
           color: #63b3ed;
         }
         
-        .tooltip-visits {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          margin-top: 4px;
-          padding: 2px 8px;
+        .tooltip-row {
+          display: flex;
+          justify-content: space-between;
+          margin: 4px 0;
+          font-size: 12px;
+        }
+        
+        .tooltip-label {
+          color: #a0aec0;
+          margin-right: 12px;
+        }
+        
+        .tooltip-value {
+          color: #e2e8f0;
+          font-weight: 600;
+        }
+        
+        .tooltip-highlight {
           background: rgba(72, 187, 120, 0.2);
-          border-radius: 12px;
-          font-size: 11px;
+          padding: 4px 10px;
+          border-radius: 6px;
+          margin-top: 6px;
+          text-align: center;
           color: #9ae6b4;
+          font-weight: 600;
         }
         
         .stats-panel {
@@ -243,13 +266,13 @@ class D3WorldMapElement extends HTMLElement {
           color: #4a5568;
         }
         
-        .legend-color {
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
+        .legend-icon {
+          width: 16px;
+          height: 20px;
           margin-right: 10px;
-          border: 2.5px solid white;
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         
         .loading {
@@ -300,17 +323,31 @@ class D3WorldMapElement extends HTMLElement {
 
       <div class="map-container" id="container">
         <div class="loading" id="loading">Loading world map...</div>
-        <svg id="map"></svg>
+        <svg id="map">
+          <defs>
+            <!-- Location Pin Icon - Recent (Green) -->
+            <g id="pin-recent">
+              <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                    class="marker-pin-recent"/>
+            </g>
+            
+            <!-- Location Pin Icon - Old (Blue) -->
+            <g id="pin-old">
+              <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                    class="marker-pin-old"/>
+            </g>
+          </defs>
+        </svg>
         
         <div class="stats-panel">
           <h3>🌍 Live Visitor Map</h3>
           <div class="stat-item">
-            <span class="stat-label">Total Visitors</span>
-            <span class="stat-value" id="totalCount">0</span>
+            <span class="stat-label">Cities</span>
+            <span class="stat-value" id="cityCount">0</span>
           </div>
           <div class="stat-item">
-            <span class="stat-label">Countries</span>
-            <span class="stat-value" id="countryCount">0</span>
+            <span class="stat-label">Total Visits</span>
+            <span class="stat-value" id="totalVisits">0</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">Last 24 Hours</span>
@@ -320,11 +357,21 @@ class D3WorldMapElement extends HTMLElement {
 
         <div class="legend">
           <div class="legend-item">
-            <div class="legend-color" style="background: #48bb78;"></div>
+            <div class="legend-icon">
+              <svg width="16" height="20" viewBox="0 0 24 24">
+                <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                      fill="#48bb78"/>
+              </svg>
+            </div>
             <span>Recent (24h)</span>
           </div>
           <div class="legend-item">
-            <div class="legend-color" style="background: #4299e1;"></div>
+            <div class="legend-icon">
+              <svg width="16" height="20" viewBox="0 0 24 24">
+                <path d="M12 0C7.58 0 4 3.58 4 8c0 5.5 8 13 8 13s8-7.5 8-13c0-4.42-3.58-8-8-8zm0 11c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" 
+                      fill="#4299e1"/>
+              </svg>
+            </div>
             <span>Earlier Visits</span>
           </div>
         </div>
@@ -495,8 +542,8 @@ class D3WorldMapElement extends HTMLElement {
     
     try {
       const locations = JSON.parse(mapData);
-      console.log('\n========== UPDATING MARKERS ==========');
-      console.log('📍 Total locations:', locations.length);
+      console.log('\n========== UPDATING CITY-LEVEL MARKERS ==========');
+      console.log('📍 Total cities:', locations.length);
       
       if (locations.length === 0) {
         console.log('⚠️ No locations to display');
@@ -513,11 +560,10 @@ class D3WorldMapElement extends HTMLElement {
       const now = new Date();
       const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       let recentCount = 0;
+      let totalVisits = 0;
       const countries = new Set();
       
-      // Group locations by proximity to handle overlapping
-      const locationGroups = new Map();
-      
+      // Add markers
       locations.forEach((location, index) => {
         if (typeof location.lat !== 'number' || typeof location.lng !== 'number') {
           console.error(`❌ Invalid location ${index}:`, location);
@@ -534,123 +580,131 @@ class D3WorldMapElement extends HTMLElement {
           return;
         }
         
-        // Round coordinates to group nearby markers (within ~10 pixels)
-        const key = `${Math.round(coords[0] / 10) * 10},${Math.round(coords[1] / 10) * 10}`;
-        
-        if (!locationGroups.has(key)) {
-          locationGroups.set(key, []);
-        }
-        locationGroups.get(key).push({ location, coords });
+        const [x, y] = coords;
+        const isRecent = location.isRecent;
         
         // Statistics
-        const isRecent = location.lastVisit && new Date(location.lastVisit) > oneDayAgo;
         if (isRecent) recentCount++;
+        totalVisits += location.totalVisits || 0;
         if (location.country) countries.add(location.country);
-      });
-      
-      console.log('📦 Grouped into', locationGroups.size, 'clusters');
-      
-      // Add markers with offset for overlapping locations
-      let markerCount = 0;
-      locationGroups.forEach((group, key) => {
-        group.forEach((item, index) => {
-          const { location, coords } = item;
+        
+        // Create marker group
+        const markerGroup = this.markersGroup.append('g')
+          .attr('class', 'location-marker')
+          .attr('transform', `translate(${x}, ${y})`);
+        
+        // Add pulse animation for recent visitors
+        if (isRecent) {
+          markerGroup.append('circle')
+            .attr('cx', 0)
+            .attr('cy', -10)
+            .attr('r', 4)
+            .attr('class', 'marker-pulse')
+            .style('color', '#48bb78');
+        }
+        
+        // Add location pin icon
+        markerGroup.append('use')
+          .attr('href', isRecent ? '#pin-recent' : '#pin-old')
+          .attr('x', -12)
+          .attr('y', -24)
+          .attr('width', 24)
+          .attr('height', 24);
+        
+        // Add visit count badge if more than 1 visit
+        if (location.totalVisits > 1) {
+          const badge = markerGroup.append('g')
+            .attr('class', 'visit-badge')
+            .attr('transform', 'translate(8, -20)');
           
-          // Add small circular offset for overlapping markers
-          const angle = (index / group.length) * 2 * Math.PI;
-          const radius = group.length > 1 ? 8 : 0;
-          const x = coords[0] + Math.cos(angle) * radius;
-          const y = coords[1] + Math.sin(angle) * radius;
+          badge.append('circle')
+            .attr('class', 'visit-badge-bg')
+            .attr('r', 10);
           
-          const isRecent = location.lastVisit && new Date(location.lastVisit) > oneDayAgo;
+          badge.append('text')
+            .attr('class', 'visit-badge-text')
+            .text(location.totalVisits > 99 ? '99+' : location.totalVisits);
+        }
+        
+        // Tooltip events - NO TRANSFORM on hover to prevent fluctuation
+        let enterTimeout;
+        let leaveTimeout;
+        
+        markerGroup.on('mouseenter', () => {
+          clearTimeout(leaveTimeout);
+          clearTimeout(enterTimeout);
           
-          // Add glow effect for recent visitors
-          if (isRecent) {
-            this.markersGroup.append('circle')
-              .attr('cx', x)
-              .attr('cy', y)
-              .attr('r', 7)
-              .attr('class', 'marker-glow')
-              .style('color', '#48bb78');
+          enterTimeout = setTimeout(() => {
+            this.activeTooltip = index;
+            tooltip.innerHTML = `
+              <strong>📍 ${location.title || 'Visitor Location'}</strong>
+              <div class="tooltip-row">
+                <span class="tooltip-label">Total Visits:</span>
+                <span class="tooltip-value">${location.totalVisits || 1}</span>
+              </div>
+              <div class="tooltip-row">
+                <span class="tooltip-label">Unique Visitors:</span>
+                <span class="tooltip-value">${location.visitorCount || 1}</span>
+              </div>
+              <div class="tooltip-row">
+                <span class="tooltip-label">Last Visit:</span>
+                <span class="tooltip-value">${location.lastVisit || 'Unknown'}</span>
+              </div>
+              ${isRecent ? '<div class="tooltip-highlight">🟢 Active in last 24h</div>' : ''}
+            `;
+            tooltip.classList.add('active');
+          }, 100);
+        });
+        
+        markerGroup.on('mousemove', (event) => {
+          if (this.activeTooltip !== index) return;
+          
+          const rect = container.getBoundingClientRect();
+          const left = event.clientX - rect.left;
+          const top = event.clientY - rect.top;
+          
+          const tooltipWidth = 220;
+          const tooltipHeight = 140;
+          
+          let finalLeft = left + 15;
+          let finalTop = top + 15;
+          
+          if (finalLeft + tooltipWidth > rect.width) {
+            finalLeft = left - tooltipWidth - 15;
+          }
+          if (finalTop + tooltipHeight > rect.height) {
+            finalTop = top - tooltipHeight - 15;
           }
           
-          // Add main marker
-          const marker = this.markersGroup.append('circle')
-            .attr('cx', x)
-            .attr('cy', y)
-            .attr('r', 7)
-            .attr('class', `marker ${isRecent ? 'marker-recent' : 'marker-old'}`)
-            .attr('data-id', location._id);
-          
-          // FIXED: Tooltip events with debouncing to prevent flickering
-          let enterTimeout;
-          let leaveTimeout;
-          
-          marker.on('mouseenter', () => {
-            clearTimeout(leaveTimeout);
-            clearTimeout(enterTimeout);
-            
-            enterTimeout = setTimeout(() => {
-              this.activeTooltip = location._id;
-              tooltip.innerHTML = `
-                <strong>${location.title || 'Visitor'}</strong><br>
-                ${location.lastVisit || 'Unknown'}<br>
-                <div class="tooltip-visits">
-                  🔄 ${location.visitCount || 1} visit${location.visitCount > 1 ? 's' : ''}
-                </div>
-              `;
-              tooltip.classList.add('active');
-            }, 100);
-          });
-          
-          marker.on('mousemove', (event) => {
-            if (this.activeTooltip !== location._id) return;
-            
-            const rect = container.getBoundingClientRect();
-            const left = event.clientX - rect.left;
-            const top = event.clientY - rect.top;
-            
-            const tooltipWidth = 200;
-            const tooltipHeight = 100;
-            
-            let finalLeft = left + 15;
-            let finalTop = top + 15;
-            
-            if (finalLeft + tooltipWidth > rect.width) {
-              finalLeft = left - tooltipWidth - 15;
-            }
-            if (finalTop + tooltipHeight > rect.height) {
-              finalTop = top - tooltipHeight - 15;
-            }
-            
-            tooltip.style.left = `${finalLeft}px`;
-            tooltip.style.top = `${finalTop}px`;
-          });
-          
-          marker.on('mouseleave', () => {
-            clearTimeout(enterTimeout);
-            clearTimeout(leaveTimeout);
-            
-            leaveTimeout = setTimeout(() => {
-              if (this.activeTooltip === location._id) {
-                tooltip.classList.remove('active');
-                this.activeTooltip = null;
-              }
-            }, 100);
-          });
-          
-          markerCount++;
+          tooltip.style.left = `${finalLeft}px`;
+          tooltip.style.top = `${finalTop}px`;
         });
+        
+        markerGroup.on('mouseleave', () => {
+          clearTimeout(enterTimeout);
+          clearTimeout(leaveTimeout);
+          
+          leaveTimeout = setTimeout(() => {
+            if (this.activeTooltip === index) {
+              tooltip.classList.remove('active');
+              this.activeTooltip = null;
+            }
+          }, 100);
+        });
+        
+        console.log(`✅ Marker ${index + 1}: ${location.title} - ${location.totalVisits} visits`);
       });
       
-      console.log('✅ Rendered markers:', markerCount);
-      console.log('📊 Recent (24h):', recentCount);
-      console.log('🌍 Countries:', countries.size);
+      console.log('\n📊 STATISTICS');
+      console.log('Cities:', locations.length);
+      console.log('Total Visits:', totalVisits);
+      console.log('Recent (24h):', recentCount);
+      console.log('Countries:', countries.size);
       console.log('======================================\n');
       
       // Update statistics
-      this.shadowRoot.getElementById('totalCount').textContent = locations.length;
-      this.shadowRoot.getElementById('countryCount').textContent = countries.size;
+      this.shadowRoot.getElementById('cityCount').textContent = locations.length;
+      this.shadowRoot.getElementById('totalVisits').textContent = totalVisits;
       this.shadowRoot.getElementById('recentCount').textContent = recentCount;
       
     } catch (error) {
