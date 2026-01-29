@@ -5,6 +5,7 @@ class D3WorldMapElement extends HTMLElement {
     this.mapLoaded = false;
     this.handleResize = this.handleResize.bind(this);
     this.activeTooltip = null;
+    this.resizeTimeout = null;
     console.log('✅ D3WorldMapElement: Constructor called');
   }
 
@@ -15,6 +16,7 @@ class D3WorldMapElement extends HTMLElement {
 
   disconnectedCallback() {
     window.removeEventListener('resize', this.handleResize);
+    if (this.resizeTimeout) clearTimeout(this.resizeTimeout);
   }
 
   static get observedAttributes() {
@@ -57,6 +59,7 @@ class D3WorldMapElement extends HTMLElement {
           flex: 1;
           position: relative;
           overflow: hidden;
+          min-height: 0;
         }
         
         #map {
@@ -209,6 +212,7 @@ class D3WorldMapElement extends HTMLElement {
           border-top: 1px solid rgba(255, 255, 255, 0.3);
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
           flex-wrap: wrap;
+          flex-shrink: 0;
         }
         
         .stats-group {
@@ -464,26 +468,53 @@ class D3WorldMapElement extends HTMLElement {
   }
 
   handleResize() {
-    if (!this.mapLoaded) return;
-    
-    const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
-    const svg = window.d3.select(this.shadowRoot.getElementById('map'));
-    
-    const width = mapWrapper.clientWidth;
-    const height = mapWrapper.clientHeight;
-    
-    svg.attr('width', width).attr('height', height);
-    
-    // Increase scale for better fill - adjusted for better fit
-    this.projection
-      .scale(width / 5.5)
-      .translate([width / 2, height / 1.8]);
-    
-    svg.selectAll('.country').attr('d', this.path);
-    
-    if (this.getAttribute('map-data')) {
-      this.updateMarkers();
+    // Debounce resize events
+    if (this.resizeTimeout) {
+      clearTimeout(this.resizeTimeout);
     }
+    
+    this.resizeTimeout = setTimeout(() => {
+      if (!this.mapLoaded) return;
+      
+      console.log('🔄 Handling resize...');
+      
+      const mapWrapper = this.shadowRoot.getElementById('mapWrapper');
+      const svg = window.d3.select(this.shadowRoot.getElementById('map'));
+      
+      // Get actual dimensions
+      const width = mapWrapper.clientWidth;
+      const height = mapWrapper.clientHeight;
+      
+      console.log('📐 New dimensions:', width, 'x', height);
+      
+      if (width === 0 || height === 0) {
+        console.log('⚠️ Invalid dimensions, skipping resize');
+        return;
+      }
+      
+      // Update SVG dimensions
+      svg
+        .attr('width', width)
+        .attr('height', height)
+        .attr('viewBox', `0 0 ${width} ${height}`);
+      
+      // Recalculate projection with proper centering
+      const scale = Math.min(width / 6.5, height / 4);
+      
+      this.projection
+        .scale(scale)
+        .translate([width / 2, height / 2]);
+      
+      // Redraw countries
+      svg.selectAll('.country').attr('d', this.path);
+      
+      // Update markers if data exists
+      if (this.getAttribute('map-data')) {
+        this.updateMarkers();
+      }
+      
+      console.log('✅ Resize complete');
+    }, 250); // Debounce delay
   }
 
   loadScript(src) {
@@ -528,10 +559,11 @@ class D3WorldMapElement extends HTMLElement {
     const svg = window.d3.select(this.shadowRoot.getElementById('map'));
     const loading = this.shadowRoot.getElementById('loading');
     
+    // Get actual dimensions
     const width = mapWrapper.clientWidth || 1000;
     const height = mapWrapper.clientHeight || 600;
     
-    console.log('Map dimensions:', width, 'x', height);
+    console.log('📐 Initial map dimensions:', width, 'x', height);
     
     svg
       .attr('width', width)
@@ -539,10 +571,13 @@ class D3WorldMapElement extends HTMLElement {
       .attr('viewBox', `0 0 ${width} ${height}`)
       .attr('preserveAspectRatio', 'xMidYMid meet');
     
-    // Larger scale and adjusted translate for better fill
+    // Calculate scale based on dimensions - keeps map properly sized
+    const scale = Math.min(width / 6.5, height / 4);
+    
+    // Create projection with proper centering
     this.projection = window.d3.geoNaturalEarth1()
-      .scale(width / 5.5)  // Increased from /6 for larger map
-      .translate([width / 2, height / 1.8]);  // Adjusted Y to move map up slightly
+      .scale(scale)
+      .translate([width / 2, height / 2]);
     
     this.path = window.d3.geoPath().projection(this.projection);
     
@@ -742,8 +777,6 @@ class D3WorldMapElement extends HTMLElement {
             }
           }, 100);
         });
-        
-        console.log(`✅ Marker ${index + 1}: ${location.title} - ${location.totalVisits} visits`);
       });
       
       console.log('\n📊 STATISTICS');
