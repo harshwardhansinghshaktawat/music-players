@@ -72,6 +72,7 @@ class ModernMusicPlayer extends HTMLElement {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    flex-shrink: 0;
                 }
                 
                 .player-title {
@@ -104,16 +105,20 @@ class ModernMusicPlayer extends HTMLElement {
                 /* Sidebar/Browser */
                 .browser-sidebar {
                     width: 320px;
+                    flex-shrink: 0;
                     background: var(--surface-color);
                     border-right: 1px solid var(--border-color);
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
+                    /* FIX 1: Sidebar itself does NOT grow — inner content scrolls */
+                    min-height: 0;
                 }
                 
                 .browser-header {
                     padding: 1rem 1.25rem;
                     border-bottom: 1px solid var(--border-color);
+                    flex-shrink: 0;
                 }
                 
                 .view-toggle {
@@ -185,42 +190,54 @@ class ModernMusicPlayer extends HTMLElement {
                     pointer-events: none;
                 }
                 
+                /* FIX 1: browser-content scrolls vertically within the fixed sidebar height */
                 .browser-content {
                     flex: 1;
                     overflow-y: auto;
+                    overflow-x: hidden;
                     padding: 1rem;
+                    min-height: 0;
                 }
                 
                 /* Custom Scrollbar */
                 .browser-content::-webkit-scrollbar {
-                    width: 8px;
+                    width: 6px;
                 }
                 
                 .browser-content::-webkit-scrollbar-track {
-                    background: var(--background-color);
+                    background: transparent;
+                    border-radius: 3px;
                 }
                 
                 .browser-content::-webkit-scrollbar-thumb {
                     background: var(--surface-light);
-                    border-radius: 4px;
+                    border-radius: 3px;
+                    transition: background 0.2s;
                 }
                 
                 .browser-content::-webkit-scrollbar-thumb:hover {
-                    background: var(--border-color);
+                    background: var(--primary-color);
+                    opacity: 0.7;
                 }
                 
-                /* Album Cards */
+                /* Firefox scrollbar */
+                .browser-content {
+                    scrollbar-width: thin;
+                    scrollbar-color: var(--surface-light) transparent;
+                }
+                
+                /* Album Cards — desktop grid */
                 .albums-grid {
                     display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-                    gap: 1rem;
+                    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+                    gap: 0.875rem;
                 }
                 
                 .album-card {
                     background: var(--background-color);
                     border: 1px solid var(--border-color);
                     border-radius: var(--radius-lg);
-                    padding: 1rem;
+                    padding: 0.875rem;
                     cursor: pointer;
                     transition: var(--transition);
                     text-align: center;
@@ -377,6 +394,7 @@ class ModernMusicPlayer extends HTMLElement {
                     font-size: 0.75rem;
                     color: var(--text-muted);
                     font-variant-numeric: tabular-nums;
+                    flex-shrink: 0;
                 }
                 
                 /* Now Playing */
@@ -385,6 +403,7 @@ class ModernMusicPlayer extends HTMLElement {
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
+                    min-height: 0;
                 }
                 
                 .now-playing-content {
@@ -395,6 +414,7 @@ class ModernMusicPlayer extends HTMLElement {
                     justify-content: center;
                     padding: 3rem 2rem;
                     overflow-y: auto;
+                    min-height: 0;
                 }
                 
                 .current-cover-container {
@@ -532,6 +552,7 @@ class ModernMusicPlayer extends HTMLElement {
                     background: var(--surface-color);
                     border-top: 1px solid var(--border-color);
                     padding: 1.5rem 2rem;
+                    flex-shrink: 0;
                 }
                 
                 .progress-section {
@@ -691,10 +712,6 @@ class ModernMusicPlayer extends HTMLElement {
                     transition: var(--transition);
                 }
                 
-                .volume-slider::-moz-range-thumb:hover {
-                    transform: scale(1.2);
-                }
-                
                 /* Empty State */
                 .empty-state {
                     text-align: center;
@@ -746,18 +763,13 @@ class ModernMusicPlayer extends HTMLElement {
                     fill: currentColor;
                     transform: rotate(180deg);
                 }
-                
-                /* Responsive */
-                @media (max-width: 1024px) {
-                    .browser-sidebar {
-                        width: 280px;
-                    }
-                    
-                    .albums-grid {
-                        grid-template-columns: 1fr;
-                    }
-                }
-                
+
+                /* =====================================================
+                   FIX 3: MOBILE ALBUM SLIDER
+                   On mobile the album grid becomes a horizontal
+                   scroll-snap carousel instead of vertical stacking
+                   ===================================================== */
+
                 @media (max-width: 768px) {
                     .player-main {
                         flex-direction: column;
@@ -765,9 +777,39 @@ class ModernMusicPlayer extends HTMLElement {
                     
                     .browser-sidebar {
                         width: 100%;
-                        max-height: 40%;
+                        /* Give the sidebar a fixed height so it doesn't collapse */
+                        height: 280px;
+                        max-height: 280px;
+                        flex-shrink: 0;
                         border-right: none;
                         border-bottom: 1px solid var(--border-color);
+                    }
+
+                    /* On mobile, switch album grid to horizontal slider */
+                    .albums-grid {
+                        display: flex;
+                        flex-direction: row;
+                        flex-wrap: nowrap;
+                        gap: 0.75rem;
+                        /* Horizontal scroll with snap */
+                        overflow-x: auto;
+                        overflow-y: hidden;
+                        scroll-snap-type: x mandatory;
+                        -webkit-overflow-scrolling: touch;
+                        padding-bottom: 0.5rem; /* room for scrollbar */
+                        /* Hide scrollbar by default on mobile — swipe is obvious */
+                        scrollbar-width: none;
+                    }
+
+                    .albums-grid::-webkit-scrollbar {
+                        display: none;
+                    }
+
+                    /* Each card snaps into place and has a fixed width */
+                    .album-card {
+                        flex: 0 0 140px;
+                        width: 140px;
+                        scroll-snap-align: start;
                     }
                     
                     .now-playing-content {
@@ -822,6 +864,26 @@ class ModernMusicPlayer extends HTMLElement {
                     
                     .volume-control {
                         min-width: 80px;
+                    }
+
+                    .browser-sidebar {
+                        height: 240px;
+                        max-height: 240px;
+                    }
+
+                    .album-card {
+                        flex: 0 0 120px;
+                        width: 120px;
+                    }
+                }
+                
+                @media (max-width: 1024px) and (min-width: 769px) {
+                    .browser-sidebar {
+                        width: 280px;
+                    }
+                    
+                    .albums-grid {
+                        grid-template-columns: 1fr;
                     }
                 }
             </style>
@@ -996,7 +1058,6 @@ class ModernMusicPlayer extends HTMLElement {
     _processAlbums() {
         if (!this._playerData || !this._playerData.songs) return;
         
-        // Group songs by album
         const albumsMap = new Map();
         
         this._playerData.songs.forEach(song => {
@@ -1019,21 +1080,29 @@ class ModernMusicPlayer extends HTMLElement {
     }
     
     _updateStyles() {
-        const primaryColor = this.getAttribute('primary-color');
-        const secondaryColor = this.getAttribute('secondary-color');
-        const backgroundColor = this.getAttribute('background-color');
-        const surfaceColor = this.getAttribute('surface-color');
-        const textPrimary = this.getAttribute('text-primary');
-        const textSecondary = this.getAttribute('text-secondary');
-        const accentColor = this.getAttribute('accent-color');
-        
-        if (primaryColor) this.style.setProperty('--primary-color', primaryColor);
-        if (secondaryColor) this.style.setProperty('--secondary-color', secondaryColor);
-        if (backgroundColor) this.style.setProperty('--background-color', backgroundColor);
-        if (surfaceColor) this.style.setProperty('--surface-color', surfaceColor);
-        if (textPrimary) this.style.setProperty('--text-primary', textPrimary);
-        if (textSecondary) this.style.setProperty('--text-secondary', textSecondary);
-        if (accentColor) this.style.setProperty('--accent-color', accentColor);
+        // FIX 2: Apply CSS custom properties directly on the :host element
+        // so they cascade into the shadow DOM correctly
+        const attrs = {
+            'primary-color':    '--primary-color',
+            'secondary-color':  '--secondary-color',
+            'background-color': '--background-color',
+            'surface-color':    '--surface-color',
+            'text-primary':     '--text-primary',
+            'text-secondary':   '--text-secondary',
+            'accent-color':     '--accent-color',
+        };
+
+        const container = this._shadow.querySelector('.player-container');
+
+        for (const [attr, cssVar] of Object.entries(attrs)) {
+            const val = this.getAttribute(attr);
+            if (val) {
+                // Set on both the host element AND the container
+                // This ensures cascade works regardless of shadow mode
+                this.style.setProperty(cssVar, val);
+                if (container) container.style.setProperty(cssVar, val);
+            }
+        }
     }
     
     _loadWaveSurferScript() {
@@ -1087,26 +1156,22 @@ class ModernMusicPlayer extends HTMLElement {
     }
     
     _setupEventListeners() {
-        // View toggle
         this._shadow.querySelectorAll('.view-toggle-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._currentView = btn.dataset.view;
-                this._selectedAlbum = null; // Reset selected album when switching views
+                this._selectedAlbum = null;
                 this._updateViewToggle();
                 this._renderBrowser();
             });
         });
         
-        // Search
         const searchInput = this._shadow.querySelector('.search-input');
         searchInput.addEventListener('input', (e) => {
             this._searchQuery = e.target.value.toLowerCase();
             this._renderBrowser();
         });
         
-        // Play/Pause
         this._shadow.querySelector('.play-btn').addEventListener('click', () => {
-            // If no song is loaded, load and play the first song
             if (!this._currentPlaylist || this._currentSongIndex === undefined) {
                 this._playFirstSong();
             } else if (this._audioElement) {
@@ -1118,11 +1183,9 @@ class ModernMusicPlayer extends HTMLElement {
             }
         });
         
-        // Previous/Next
         this._shadow.querySelector('.prev-btn').addEventListener('click', () => this._playPrevious());
         this._shadow.querySelector('.next-btn').addEventListener('click', () => this._playNext());
         
-        // Shuffle/Repeat
         this._shadow.querySelector('.shuffle-btn').addEventListener('click', () => {
             this._isShuffled = !this._isShuffled;
             this._shadow.querySelector('.shuffle-btn').classList.toggle('active', this._isShuffled);
@@ -1133,7 +1196,6 @@ class ModernMusicPlayer extends HTMLElement {
             this._shadow.querySelector('.repeat-btn').classList.toggle('active', this._isRepeat);
         });
         
-        // Volume
         const volumeSlider = this._shadow.querySelector('.volume-slider');
         volumeSlider.addEventListener('input', (e) => {
             this._currentVolume = parseFloat(e.target.value);
@@ -1157,7 +1219,6 @@ class ModernMusicPlayer extends HTMLElement {
             this._updateVolumeIcon();
         });
         
-        // Progress bar
         const progressBar = this._shadow.querySelector('.progress-bar-container');
         progressBar.addEventListener('click', (e) => {
             if (!this._audioElement || !this._audioElement.duration) return;
@@ -1169,14 +1230,11 @@ class ModernMusicPlayer extends HTMLElement {
     }
     
     _playFirstSong() {
-        // Determine which playlist to use
         let playlist = [];
         
         if (this._selectedAlbum && this._selectedAlbum.songs) {
-            // If an album is selected, play from that album
             playlist = this._selectedAlbum.songs;
         } else if (this._allSongs && this._allSongs.length > 0) {
-            // Otherwise, play from all songs
             playlist = this._allSongs;
         }
         
@@ -1258,7 +1316,6 @@ class ModernMusicPlayer extends HTMLElement {
             </div>
         `;
         
-        // Add click handlers
         container.querySelectorAll('.album-card').forEach(card => {
             card.addEventListener('click', () => {
                 const albumName = card.dataset.album;
@@ -1273,7 +1330,6 @@ class ModernMusicPlayer extends HTMLElement {
     _renderAllSongs(container) {
         let songs = [];
         
-        // FIX: Show all songs if no album is selected, otherwise show album songs
         if (this._selectedAlbum) {
             songs = this._selectedAlbum.songs;
         } else {
@@ -1302,7 +1358,6 @@ class ModernMusicPlayer extends HTMLElement {
             return;
         }
         
-        // Add back button if album is selected
         const backButton = this._selectedAlbum ? `
             <button class="back-btn" id="back-to-albums">
                 <svg viewBox="0 0 24 24">
@@ -1316,7 +1371,6 @@ class ModernMusicPlayer extends HTMLElement {
             ${backButton}
             <div class="songs-list">
                 ${songs.map((song, index) => {
-                    // Find the actual index in the current playlist
                     const actualIndex = this._currentPlaylist?.indexOf(song) ?? -1;
                     const isActive = this._currentPlaylist && actualIndex === this._currentSongIndex;
                     
@@ -1339,7 +1393,6 @@ class ModernMusicPlayer extends HTMLElement {
             </div>
         `;
         
-        // Back button handler
         const backBtn = container.querySelector('#back-to-albums');
         if (backBtn) {
             backBtn.addEventListener('click', () => {
@@ -1350,7 +1403,6 @@ class ModernMusicPlayer extends HTMLElement {
             });
         }
         
-        // Song click handlers
         container.querySelectorAll('.song-item').forEach(item => {
             item.addEventListener('click', () => {
                 const index = parseInt(item.dataset.index);
@@ -1373,7 +1425,7 @@ class ModernMusicPlayer extends HTMLElement {
         }
         
         this._updateNowPlaying();
-        this._renderBrowser(); // Update active state
+        this._renderBrowser();
     }
     
     _updateNowPlaying() {
@@ -1440,7 +1492,6 @@ class ModernMusicPlayer extends HTMLElement {
             </div>
         `;
         
-        // Initialize mini visualizer canvas
         this._miniCanvas = nowPlayingContent.querySelector('.mini-visualizer');
         if (this._miniCanvas) {
             this._miniCanvasCtx = this._miniCanvas.getContext('2d');
@@ -1454,7 +1505,7 @@ class ModernMusicPlayer extends HTMLElement {
             spotify: '<svg viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>',
             apple: '<svg viewBox="0 0 24 24"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>',
             youtube: '<svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
-            soundcloud: '<svg viewBox="0 0 24 24"><path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.27-2.154c0-.057-.045-.1-.09-.1m-.899.828c-.06 0-.091.037-.105.094L0 14.479l.165 1.308c0 .055.045.094.09.094s.089-.045.104-.104l.21-1.319-.21-1.334c0-.061-.044-.093-.09-.093m1.83-1.229c-.061 0-.12.045-.12.104l-.21 2.563.225 2.458c0 .06.045.12.119.12.061 0 .105-.061.121-.12l.254-2.474-.254-2.548c-.016-.06-.061-.12-.121-.12m.945-.089c-.075 0-.135.06-.15.135l-.193 2.64.21 2.544c.016.075.075.135.15.135.074 0 .135-.06.15-.135l.225-2.55-.225-2.623c0-.06-.06-.135-.135-.135l-.031-.017zm1.155.36c-.005-.09-.075-.149-.159-.149-.09 0-.158.06-.164.149l-.217 2.43.2 2.563c0 .09.075.157.159.157.074 0 .148-.068.148-.158l.227-2.563-.227-2.444.033.015zm.809-1.709c-.101 0-.18.09-.18.181l-.21 3.957.187 2.563c0 .09.08.164.18.164.094 0 .174-.09.18-.18l.209-2.563-.209-3.972c-.008-.104-.088-.18-.18-.18m.959-.914c-.105 0-.195.09-.203.194l-.18 4.872.165 2.548c0 .12.09.209.195.209.104 0 .194-.089.21-.209l.193-2.548-.192-4.856c-.016-.12-.105-.21-.21-.21m.989-.449c-.121 0-.211.089-.225.209l-.165 5.275.165 2.52c.014.119.104.225.225.225.119 0 .225-.105.225-.225l.195-2.52-.196-5.275c0-.12-.105-.225-.225-.225m1.245.045c0-.135-.105-.24-.24-.24-.119 0-.24.105-.24.24l-.149 5.441.149 2.503c.016.135.121.24.256.24s.24-.105.24-.24l.164-2.503-.164-5.456-.016.015zm.749-.134c-.135 0-.255.119-.255.254l-.15 5.322.15 2.473c0 .15.12.255.255.255s.255-.105.255-.255l.15-2.473-.15-5.307c0-.148-.12-.254-.271-.254l.016-.015zm.749-.15c-.15 0-.285.135-.285.285L9.7 14.77l.135 2.458c0 .149.135.27.285.27s.27-.12.27-.27l.15-2.458-.15-5.03c0-.15-.135-.27-.285-.27m1.005.166c-.164 0-.284.135-.284.285l-.121 4.695.121 2.428c0 .15.12.285.284.285.15 0 .285-.135.285-.285l.135-2.428-.135-4.695c0-.165-.135-.285-.284-.285m.75-.045c-.165 0-.3.135-.3.3l-.105 4.725.105 2.4c0 .165.135.3.3.3.165 0 .3-.135.3-.3l.12-2.4-.12-4.725c-.014-.164-.149-.3-.3-.3m.884-.05c-.194 0-.315.135-.315.345l-.09 4.78.09 2.4c0 .164.136.314.315.314.165 0 .314-.15.314-.314l.091-2.4-.091-4.78c0-.194-.164-.345-.314-.345m.914-.095c-.196 0-.346.149-.346.345L14.6 14.725l.076 2.383c0 .209.15.36.345.36.21 0 .36-.165.36-.36l.09-2.403-.09-4.702c0-.209-.165-.36-.36-.36m1.035-.074c-.21 0-.376.18-.376.375l-.075 4.46.075 2.374c0 .194.166.374.376.374.195 0 .375-.18.375-.374l.074-2.374-.074-4.46c0-.21-.18-.376-.375-.376m1.05-.595c-.061 0-.105.045-.105.09l-.061 5.297.06 2.335c0 .06.045.104.106.104.059 0 .104-.044.104-.104l.075-2.335-.074-5.327c0-.046-.045-.075-.105-.075m.509.137c-.075 0-.135.06-.135.135l-.045 5.172.045 2.321c0 .074.06.15.135.15.09 0 .149-.076.149-.15l.06-2.321-.06-5.172c0-.074-.06-.135-.149-.135l.015-.007zm.958.137c-.103 0-.164.08-.164.165l-.046 5.041.047 2.335c0 .105.074.18.164.18.105 0 .18-.075.18-.18l.052-2.335-.052-5.04c0-.09-.075-.166-.179-.166m.904-.061c-.12 0-.194.09-.194.18l-.029 5.017.029 2.329c0 .104.074.18.194.18.109 0 .18-.075.193-.18l.052-2.329-.044-5.033c0-.09-.089-.165-.193-.165l-.008.001zm1.214.196c-.09 0-.18.08-.18.18l-.044 4.856.045 2.321c0 .104.09.18.18.18.104 0 .18-.076.189-.18l.029-2.321-.029-4.871c0-.107-.088-.178-.19-.165zm1.169.815c0-.09-.082-.165-.18-.165-.089 0-.164.075-.171.164l-.045 4.071.046 2.336c0 .09.075.164.18.164.094 0 .179-.074.18-.164l.044-2.336-.053-4.07zm1.349-.627c-.119 0-.209.084-.209.203l-.044 4.5.044 2.307c0 .119.105.209.209.209.104 0 .179-.09.194-.209l.052-2.307-.052-4.5c0-.12-.09-.204-.194-.204l.001.001zm.825-.209c-.135 0-.219.09-.224.224l-.046 4.513.046 2.294c.005.134.089.224.225.224.119 0 .224-.09.229-.224l.044-2.294-.044-4.513c0-.134-.109-.225-.229-.225m.875-.118c-.149 0-.23.105-.234.233l-.044 4.605.044 2.257c0 .133.09.239.234.239.136 0 .24-.105.244-.24l.046-2.255-.044-4.606c-.009-.134-.113-.237-.245-.233h-.001zm.988.008c-.146 0-.255.105-.255.254l-.029 4.597.029 2.254c0 .15.109.254.255.254.149 0 .254-.104.259-.254l.03-2.254-.03-4.596c-.005-.16-.114-.255-.259-.255m1.004.385c-.03-.12-.135-.215-.255-.215-.135 0-.245.9-.255.226l-.03 4.222.03 2.241c.01.135.12.226.255.226.12 0 .226-.09.255-.226l.03-2.24-.03-4.222v-.012zm.764-.23c-.164 0-.284.12-.284.284l-.03 4.438.03 2.227c0 .164.12.284.284.284.149 0 .284-.12.284-.284l.029-2.227-.029-4.438c0-.165-.135-.285-.284-.285m.929-.126c-.18 0-.301.135-.301.3l-.03 4.277.03 2.176c0 .18.135.301.301.301.164 0 .3-.12.3-.301l.03-2.176-.03-4.277c0-.18-.136-.3-.3-.3m1.094-.329c-.195 0-.315.142-.315.33l-.03 4.264.03 2.169c0 .189.12.315.315.315.165 0 .314-.126.314-.315l.03-2.17-.03-4.262c0-.189-.133-.331-.314-.331m.598-.15c-.21 0-.345.149-.345.354l-.03 4.408.03 2.143c0 .194.149.344.345.344.209 0 .33-.149.33-.344l.045-2.143-.044-4.408c0-.21-.136-.345-.331-.345v-.01zM2.072 10.81c-.051 0-.09.039-.096.09l-.249 3.04.264 2.971c.006.052.045.09.096.09s.09-.038.096-.09l.28-2.971-.28-3.04c-.006-.051-.045-.09-.096-.09m-.446-.581c-.045 0-.09.03-.105.074L1.3 13.404l.224 2.881c.015.045.06.074.105.074.047 0 .09-.029.1-.074l.255-2.881-.257-3.091c-.008-.045-.05-.074-.1-.074m3.502-4.524c-.004-.06-.049-.104-.105-.104-.066 0-.111.044-.115.109l-.218 7.614.218 2.525c.004.06.049.106.115.106.056 0 .101-.045.105-.105l.247-2.527-.247-7.619z"/></svg>',
+            soundcloud: '<svg viewBox="0 0 24 24"><path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.27-2.154c0-.057-.045-.1-.09-.1m-.899.828c-.06 0-.091.037-.105.094L0 14.479l.165 1.308c0 .055.045.094.09.094s.089-.045.104-.104l.21-1.319-.21-1.334c0-.061-.044-.093-.09-.093m1.83-1.229c-.061 0-.12.045-.12.104l-.21 2.563.225 2.458c0 .06.045.12.119.12.061 0 .105-.061.121-.12l.254-2.474-.254-2.548c-.016-.06-.061-.12-.121-.12m.945-.089c-.075 0-.135.06-.15.135l-.193 2.64.21 2.544c.016.075.075.135.15.135.074 0 .135-.06.15-.135l.225-2.55-.225-2.623c0-.06-.06-.135-.135-.135l-.031-.017zm1.155.36c-.005-.09-.075-.149-.159-.149-.09 0-.158.06-.164.149l-.217 2.43.2 2.563c0 .09.075.157.159.157.074 0 .148-.068.148-.158l.227-2.563-.227-2.444.033.015zm.809-1.709c-.101 0-.18.09-.18.181l-.21 3.957.187 2.563c0 .09.08.164.18.164.094 0 .174-.09.18-.18l.209-2.563-.209-3.972c-.008-.104-.088-.18-.18-.18m.959-.914c-.105 0-.195.09-.203.194l-.18 4.872.165 2.548c0 .12.09.209.195.209.104 0 .194-.089.21-.209l.193-2.548-.192-4.856c-.016-.12-.105-.21-.21-.21m.989-.449c-.121 0-.211.089-.225.209l-.165 5.275.165 2.52c.014.119.104.225.225.225.119 0 .225-.105.225-.225l.195-2.52-.196-5.275c0-.12-.105-.225-.225-.225m1.245.045c0-.135-.105-.24-.24-.24-.119 0-.24.105-.24.24l-.149 5.441.149 2.503c.016.135.121.24.256.24s.24-.105.24-.24l.164-2.503-.164-5.456-.016.015zm.749-.134c-.135 0-.255.119-.255.254l-.15 5.322.15 2.473c0 .15.12.255.255.255s.255-.105.255-.255l.15-2.473-.15-5.307c0-.148-.12-.254-.271-.254l.016-.015zm.749-.15c-.15 0-.285.135-.285.285L9.7 14.77l.135 2.458c0 .149.135.27.285.27s.27-.12.27-.27l.15-2.458-.15-5.03c0-.15-.135-.27-.285-.27m1.005.166c-.164 0-.284.135-.284.285l-.121 4.695.121 2.428c0 .15.12.285.284.285.15 0 .285-.135.285-.285l.135-2.428-.135-4.695c0-.165-.135-.285-.284-.285m.75-.045c-.165 0-.3.135-.3.3l-.105 4.725.105 2.4c0 .165.135.3.3.3.165 0 .3-.135.3-.3l.12-2.4-.12-4.725c-.014-.164-.149-.3-.3-.3m.884-.05c-.194 0-.315.135-.315.345l-.09 4.78.09 2.4c0 .164.136.314.315.314.165 0 .314-.15.314-.314l.091-2.4-.091-4.78c0-.194-.164-.345-.314-.345m.914-.095c-.196 0-.346.149-.346.345L14.6 14.725l.076 2.383c0 .209.15.36.345.36.21 0 .36-.165.36-.36l.09-2.403-.09-4.702c0-.209-.165-.36-.36-.36m1.035-.074c-.21 0-.376.18-.376.375l-.075 4.46.075 2.374c0 .194.166.374.376.374.195 0 .375-.18.375-.374l.074-2.374-.074-4.46c0-.21-.18-.376-.375-.376"/></svg>',
             cart: '<svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>'
         };
         return icons[type] || '';
@@ -1542,7 +1593,6 @@ class ModernMusicPlayer extends HTMLElement {
             pauseIcon.style.display = 'none';
         }
         
-        // Update cover playing state
         const currentCover = this._shadow.querySelector('.current-cover');
         if (currentCover) {
             if (this._isPlaying) {
