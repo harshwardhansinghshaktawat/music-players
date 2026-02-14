@@ -39,11 +39,9 @@ class AudioReactivePlayer extends HTMLElement {
         this._audio          = null;
         this._audioCtx       = null;
         this._gainNode       = null;
-        this._analyserKick   = null;   // small FFT for kick detection (fftSize 256)
-        this._kickData       = null;   // Uint8Array for kick analyser
-        this._kickEnvelope   = 0;      // current kick spike value  [0..1], decays
-        this._kickPrev       = 0;      // previous bass energy for onset detection
-        this._kickCooldown   = 0;      // frames before next kick can fire
+        this._analyserKick   = null;   // analyser for kick detection
+        this._kickData       = null;   // Uint8Array frequency data
+        this._kickEnvelope   = 0;      // current kick spike [0..1], decays in render loop
 
         // ── Three.js ──
         this._renderer  = null;
@@ -741,12 +739,15 @@ audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; 
             this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             this._gainNode = this._audioCtx.createGain();
 
-            // ── Kick analyser: 256 FFT, no smoothing ──────────
-            //  No smoothing is critical for transient detection —
-            //  we need to see the sharp attack, not a rolling average.
+            // ── Kick analyser: 512 FFT, smoothing 0.75 ────────
+            //  fftSize=512 → bin width ≈ 86 Hz at 44.1kHz
+            //  smoothing=0.75: essential — raw unsmoothed data is
+            //  jittery frame-to-frame even during silence, causing
+            //  constant false triggers. Smoothed envelope gives a
+            //  clean rising edge to measure spectral flux against.
             this._analyserKick = this._audioCtx.createAnalyser();
-            this._analyserKick.fftSize              = 256;
-            this._analyserKick.smoothingTimeConstant = 0.0;  // raw, no smoothing
+            this._analyserKick.fftSize              = 512;
+            this._analyserKick.smoothingTimeConstant = 0.75;
             this._kickData = new Uint8Array(this._analyserKick.frequencyBinCount);
 
             const src = this._audioCtx.createMediaElementSource(this._audio);
@@ -769,28 +770,43 @@ audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; 
 
     // ── Kick detector ─────────────────────────────────────────
     //
-    //  Technique: energy-based onset detection on bass bins only
+    //  Technique: spectral flux onset detection on low-bass bins only.
     //
-    //  The FFT for fftSize=256 at 44.1kHz gives:
-    //    bin width = 44100 / 256 ≈ 172 Hz per bin
-    //  Kick drum fundamental: 50–100 Hz → bins 0..1 (but we sum 0..3)
+    //  WHY this approach works:
+    //  ─────────────────────────────────────────────────────────
+    //  fftSize=512, sampleRate≈44100 → bin width ≈ 86 Hz
+    //  Kick drum fundamentals live at 50–120 Hz → bins 1..2
+    //  (bin 0 = DC component, always garbage — we skip it)
     //
-    //  We sum the raw (un-smoothed) energy of bass bins each frame.
-    //  A KICK is detected when:
-    //    currentEnergy > threshold  AND
-    //    currentEnergy > prevEnergy * onsetRatio
+    //  We use smoothingTimeConstant=0.75 on the analyser.
+    //  This is CRITICAL: without smoothing, getByteFrequencyData
+    //  returns noisy per-frame snapshots that differ wildly even
+    //  during silence, making onset ratio checks fire constantly.
+    //  With smoothing=0.75, the data follows the actual envelope.
     //
-    //  The second condition catches the ONSET (rapid rise), not just
-    //  loud sustained bass. This is what separates a kick thump from
-    //  a bass guitar sustain or a bassline.
+    //  Spectral flux: each frame we compute the POSITIVE difference
+    //  between current and previous smoothed energy.
+    //  flux = max(0, currentEnergy - prevEnergy)
+    //
+    //  A kick fires when flux exceeds a dynamic threshold:
+    //    flux > FLUX_THRESHOLD  (absolute floor)
+    //    AND cooldown elapsed
+    //
+    //  No onset-ratio division — just the raw positive delta.
+    //  Simple, robust, works on any genre.
     //
     _runKickDetector() {
-        const BASS_BINS     = 4;       // sum first 4 bins ≈ 0–688 Hz (kick fundamental + sub)
-        const THRESHOLD     = 140;     // min energy sum to even consider (0–255 scale per bin, max=4*255=1020)
-        const ONSET_RATIO   = 1.55;    // current must be 55% louder than previous frame to be an onset
-        const COOLDOWN_MS   = 180;     // minimum ms between kicks (prevents double-firing on same thump)
+        // Bins 1..3  ≈ 86–344 Hz  (skip bin 0 = DC garbage)
+        const BIN_LO        = 1;
+        const BIN_HI        = 3;
+        // Flux threshold: smoothed energy must RISE by at least this much
+        // Scale: each bin is 0–255, we sum 3 bins → max sum = 765
+        // A typical kick hit raises sum by 200–400; gentle threshold = 60
+        const FLUX_THRESHOLD = 60;
+        const COOLDOWN_MS    = 200;    // ms between allowed kicks
 
         let lastKickTime = 0;
+        let prevEnergy   = 0;
 
         const detect = () => {
             requestAnimationFrame(detect);
@@ -798,25 +814,22 @@ audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; 
 
             this._analyserKick.getByteFrequencyData(this._kickData);
 
-            // Sum bass bins (raw, no smoothing on analyser)
+            // Sum target bass bins
             let energy = 0;
-            for (let i = 0; i < BASS_BINS; i++) energy += this._kickData[i];
+            for (let i = BIN_LO; i <= BIN_HI; i++) energy += this._kickData[i];
 
-            const now = performance.now();
+            // Positive spectral flux only (rising edge)
+            const flux    = Math.max(0, energy - prevEnergy);
+            prevEnergy    = energy;
+
+            const now     = performance.now();
             const elapsed = now - lastKickTime;
 
-            // Onset condition: energy spike AND cooldown elapsed
-            if (
-                energy > THRESHOLD &&
-                energy > this._kickPrev * ONSET_RATIO &&
-                elapsed > COOLDOWN_MS
-            ) {
-                // KICK DETECTED — trigger envelope
+            if (flux > FLUX_THRESHOLD && elapsed > COOLDOWN_MS) {
+                // KICK — set envelope to 1, decay handled in render loop
                 this._kickEnvelope = 1.0;
                 lastKickTime       = now;
             }
-
-            this._kickPrev = energy;
         };
         detect();
     }
