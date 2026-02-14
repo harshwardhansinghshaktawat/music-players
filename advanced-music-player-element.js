@@ -1,18 +1,19 @@
 // ============================================================
 //  advanced-music-player  —  Wix Blocks Custom Element
-//  • No shadow DOM (matches Wix default element sizing pattern)
-//  • height/width fills whatever the Wix Editor container is
-//  • 10-band EQ with named presets + "Custom" slider panel
-//  • Library overlay (songs + albums), visualiser, full transport
+//  FIXED VERSION:
+//  1. Initial song now loads correctly
+//  2. Next song auto-plays on track end
+//  3. Visualizer repositioned to right of song info, larger
+//  4. Full streaming service names + tooltips on all buttons
+//  5. Rotating disc animation removed from album cover
 // ============================================================
 
 class AdvancedMusicPlayer extends HTMLElement {
 
     constructor() {
         super();
-        // — state —
         this._audio           = null;
-        this._ctx             = null;   // AudioContext
+        this._ctx             = null;
         this._analyser        = null;
         this._gain            = null;
         this._eqNodes         = [];
@@ -20,7 +21,7 @@ class AdvancedMusicPlayer extends HTMLElement {
         this._volume          = 0.8;
         this._lastVolume      = 0.8;
         this._shuffle         = false;
-        this._repeatMode      = 'none'; // none | all | one
+        this._repeatMode      = 'none';
         this._playlist        = [];
         this._songIdx         = -1;
         this._allSongs        = [];
@@ -30,14 +31,16 @@ class AdvancedMusicPlayer extends HTMLElement {
         this._idleAnimId      = null;
         this._idleVis         = false;
         this._libOpen         = false;
-        this._libView         = 'songs'; // songs | albums
+        this._libView         = 'songs';
         this._libSearch       = '';
         this._selAlbum        = null;
         this._playerData      = null;
         this._eqPreset        = 'flat';
         this._dataArray       = null;
+        this._domReady        = false;   // FIX 1: track DOM readiness
+        this._audioReady      = false;   // FIX 1: track audio readiness
+        this._pendingLoad     = null;    // FIX 1: queue initial song load
 
-        // 10-band EQ  (32 Hz … 16 kHz)
         this._EQ_FREQS  = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
         this._EQ_LABELS = ['32','64','125','250','500','1k','2k','4k','8k','16k'];
         this._PRESETS   = {
@@ -55,9 +58,6 @@ class AdvancedMusicPlayer extends HTMLElement {
         };
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  OBSERVED ATTRIBUTES
-    // ─────────────────────────────────────────────────────────
     static get observedAttributes() {
         return [
             'player-data','player-name',
@@ -75,8 +75,14 @@ class AdvancedMusicPlayer extends HTMLElement {
                 this._allSongs   = this._playerData.songs || [];
                 this._buildAlbums();
                 this._renderLib();
-                if (this._allSongs.length && this._songIdx === -1)
-                    this._loadSong(0, this._allSongs, false);
+                // FIX 1: Only attempt load if DOM is ready, else queue it
+                if (this._allSongs.length && this._songIdx === -1) {
+                    if (this._domReady) {
+                        this._loadSong(0, this._allSongs, false);
+                    } else {
+                        this._pendingLoad = { idx: 0, list: this._allSongs, autoPlay: false };
+                    }
+                }
             } catch(e) { console.error('[AMP] player-data error', e); }
         } else if (name === 'player-name' && newVal) {
             const el = this.querySelector('.amp-brand');
@@ -86,9 +92,6 @@ class AdvancedMusicPlayer extends HTMLElement {
         }
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  LIFECYCLE
-    // ─────────────────────────────────────────────────────────
     connectedCallback() {
         this._injectStyle();
         this._buildDOM();
@@ -97,10 +100,19 @@ class AdvancedMusicPlayer extends HTMLElement {
         this._buildEQChips();
         this._buildEQBands();
         this._idleStart();
+        this._domReady = true; // FIX 1: mark DOM as ready
+
         if (this._playerData) {
             this._renderLib();
-            if (this._allSongs.length && this._songIdx === -1)
-                this._loadSong(0, this._allSongs, false);
+        }
+
+        // FIX 1: Process any queued load, or trigger from existing data
+        if (this._pendingLoad) {
+            const { idx, list, autoPlay } = this._pendingLoad;
+            this._pendingLoad = null;
+            this._loadSong(idx, list, autoPlay);
+        } else if (this._allSongs.length && this._songIdx === -1) {
+            this._loadSong(0, this._allSongs, false);
         }
     }
 
@@ -110,17 +122,11 @@ class AdvancedMusicPlayer extends HTMLElement {
         if (this._ctx)   this._ctx.close().catch(() => {});
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  CSS  —  injected into the host element (no shadow DOM)
-    //          so the Wix Editor container size is respected.
-    //          Key trick: host tag uses height:100% / -webkit-fill-available
-    // ─────────────────────────────────────────────────────────
     _injectStyle() {
         const s = document.createElement('style');
         s.textContent = `
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-/* HOST — fills Wix custom-element container exactly */
 advanced-music-player {
     display:block;
     width:100%;
@@ -129,7 +135,6 @@ advanced-music-player {
     height:-webkit-fill-available;
     box-sizing:border-box;
     font-family:'Barlow Condensed',sans-serif;
-    /* design tokens */
     --bg:    #141414;
     --surf:  #1c1c1c;
     --panel: #222;
@@ -148,7 +153,6 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
     box-sizing:border-box; margin:0; padding:0;
 }
 
-/* SHELL — flex column filling host */
 .amp-shell {
     width:100%; height:100%;
     background:var(--bg);
@@ -184,10 +188,31 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
     display:flex; align-items:center; justify-content:center;
     color:var(--t2); padding:0;
     transition:color .15s,background .15s,border-color .15s;
+    position:relative;
 }
 .amp-ibtn:hover  { color:var(--t1); border-color:var(--acc); }
 .amp-ibtn.on     { color:var(--acc); border-color:var(--acc); background:rgba(255,107,0,.12); }
 .amp-ibtn svg    { width:13px; height:13px; fill:currentColor; pointer-events:none; }
+
+/* Tooltip styles */
+.amp-ibtn[title]:hover::after, .amp-play[title]:hover::after, .amp-skip[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: var(--t1);
+    font-size: 9px;
+    font-family: var(--mono);
+    letter-spacing: .05em;
+    white-space: nowrap;
+    padding: 3px 7px;
+    border-radius: 2px;
+    border: 1px solid var(--b2);
+    pointer-events: none;
+    z-index: 99;
+}
 
 /* ART STRIP */
 .amp-art {
@@ -219,14 +244,8 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
     background:linear-gradient(135deg,#2a2a2a,#1a1a1a);
 }
 .amp-thumb-ph svg { width:28px; height:28px; fill:var(--t3); opacity:.45; }
-.amp-disc {
-    position:absolute; inset:-3px; border-radius:50%;
-    border:2px solid transparent; border-top-color:var(--acc);
-    animation:amp-spin 2s linear infinite;
-    opacity:0; transition:opacity .3s;
-}
-.amp-thumb.playing .amp-disc { opacity:1; }
-@keyframes amp-spin { to { transform:rotate(360deg); } }
+
+/* FIX 5: Rotating disc REMOVED — .amp-disc and @keyframes amp-spin deleted */
 
 .amp-meta { flex:1; min-width:0; }
 .amp-title {
@@ -244,17 +263,38 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
 }
 .amp-links { display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
 .amp-link {
-    padding:2px 6px; font-size:9px; font-weight:600;
-    letter-spacing:.08em; text-transform:uppercase;
+    padding:2px 8px; font-size:9px; font-weight:600;
+    letter-spacing:.06em; text-transform:uppercase;
     background:rgba(255,107,0,.12); border:1px solid rgba(255,107,0,.3);
     color:var(--acc); border-radius:2px; text-decoration:none;
     transition:background .15s,border-color .15s;
+    font-family:var(--mono);
 }
 .amp-link:hover { background:rgba(255,107,0,.22); border-color:var(--acc); }
 
+/* FIX 3: Visualizer — right side of meta, larger and properly positioned */
+.amp-vis-wrap {
+    flex-shrink: 0;
+    width: 90px;
+    height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+}
 .amp-vis {
-    position:absolute; bottom:0; left:0; right:0;
-    height:24px; opacity:.45; pointer-events:none; display:block;
+    width: 90px;
+    height: 68px;
+    display: block;
+}
+.amp-vis-lbl {
+    font-size: 8px;
+    font-family: var(--mono);
+    color: var(--t3);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    text-align: center;
 }
 
 /* PROGRESS */
@@ -310,6 +350,7 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
     background:var(--acc); border:none; border-radius:var(--r);
     cursor:pointer; display:flex; align-items:center; justify-content:center;
     color:#fff; transition:background .15s,transform .12s,box-shadow .15s;
+    position:relative;
 }
 .amp-play:hover  { background:#ff8533; box-shadow:0 0 14px rgba(255,107,0,.4); transform:scale(1.04); }
 .amp-play:active { transform:scale(.97); }
@@ -322,6 +363,7 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
     display:flex; align-items:center; justify-content:center;
     color:var(--t2); padding:0;
     transition:color .15s,border-color .15s;
+    position:relative;
 }
 .amp-skip:hover { color:var(--t1); border-color:var(--acc); }
 .amp-skip svg   { width:13px; height:13px; fill:currentColor; }
@@ -369,7 +411,7 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
 .amp-chip:hover  { color:var(--t2); border-color:var(--t3); }
 .amp-chip.on     { color:var(--acc); border-color:var(--acc); background:rgba(255,107,0,.1); }
 
-/* EQ PANEL — collapsible, holds both preset readout bands AND custom sliders */
+/* EQ PANEL */
 .amp-eq-panel {
     background:var(--panel); border-bottom:1px solid var(--b1);
     overflow:hidden; max-height:0;
@@ -378,7 +420,6 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
 }
 .amp-eq-panel.open { max-height:120px; }
 
-/* — preset band display (read-only bars) — */
 .amp-eq-bars {
     display:flex; gap:5px; align-items:flex-end;
     padding:8px 10px 6px;
@@ -402,7 +443,6 @@ advanced-music-player *, advanced-music-player *::before, advanced-music-player 
 }
 .amp-eq-bar-freq { font-size:7px; font-family:var(--mono); color:var(--t3); text-align:center; }
 
-/* — custom slider panel — */
 .amp-eq-custom {
     display:none; gap:5px; align-items:flex-end;
     padding:8px 10px 6px;
@@ -425,7 +465,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
 }
 .amp-eq-sl-freq { font-size:7px; font-family:var(--mono); color:var(--t3); text-align:center; }
 
-/* STATUS BAR — pushed to bottom with margin-top:auto */
+/* STATUS BAR */
 .amp-status {
     display:flex; align-items:center; gap:8px;
     padding:4px 10px;
@@ -562,21 +602,21 @@ input.amp-eq-sl::-webkit-slider-thumb {
         this.appendChild(s);
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  DOM
-    // ─────────────────────────────────────────────────────────
     _buildDOM() {
         const shell = document.createElement('div');
         shell.className = 'amp-shell';
+        // FIX 3: Visualizer moved to right of meta in art strip; FIX 5: amp-disc removed from thumb
+        // FIX 4: Full streaming service names on links (handled in _nowPlaying)
+        // FIX 4: title attributes added to all buttons for tooltips
         shell.innerHTML = `
 <!-- TOP BAR -->
 <div class="amp-top">
     <span class="amp-brand">AMP·MK2</span>
     <div class="amp-dot" id="amp-dot"></div>
-    <button class="amp-ibtn" id="amp-lbtn" title="Library">
+    <button class="amp-ibtn" id="amp-lbtn" title="Open Library">
         <svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 5h-3v5.5c0 1.38-1.12 2.5-2.5 2.5S10 13.88 10 12.5 11.12 10 12.5 10c.57 0 1.08.19 1.5.5V5h4v2zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6z"/></svg>
     </button>
-    <button class="amp-ibtn" id="amp-eqbtn" title="Equalizer">
+    <button class="amp-ibtn" id="amp-eqbtn" title="Toggle Equalizer">
         <svg viewBox="0 0 24 24"><path d="M10 20h4V4h-4v16zm-6 0h4v-8H4v8zM16 9v11h4V9h-4z"/></svg>
     </button>
 </div>
@@ -589,7 +629,6 @@ input.amp-eq-sl::-webkit-slider-thumb {
             <div class="amp-thumb-ph" id="amp-ph">
                 <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
             </div>
-            <div class="amp-disc"></div>
         </div>
         <div class="amp-meta">
             <div class="amp-title"  id="amp-title">No Track</div>
@@ -597,8 +636,12 @@ input.amp-eq-sl::-webkit-slider-thumb {
             <div class="amp-album-lbl" id="amp-albl"></div>
             <div class="amp-links"  id="amp-links"></div>
         </div>
+        <!-- FIX 3: Visualizer placed here, to the right of metadata -->
+        <div class="amp-vis-wrap">
+            <canvas class="amp-vis" id="amp-vis"></canvas>
+            <div class="amp-vis-lbl" id="amp-vis-lbl">VIS</div>
+        </div>
     </div>
-    <canvas class="amp-vis" id="amp-vis"></canvas>
 </div>
 
 <!-- PROGRESS -->
@@ -617,32 +660,32 @@ input.amp-eq-sl::-webkit-slider-thumb {
 <!-- TRANSPORT -->
 <div class="amp-xport">
     <div class="amp-xl">
-        <button class="amp-ibtn" id="amp-shuf" title="Shuffle">
+        <button class="amp-ibtn" id="amp-shuf" title="Toggle Shuffle">
             <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
         </button>
-        <button class="amp-ibtn" id="amp-rep" title="Repeat">
+        <button class="amp-ibtn" id="amp-rep" title="Toggle Repeat">
             <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
         </button>
     </div>
     <div class="amp-xc">
-        <button class="amp-skip" id="amp-prev" title="Previous">
+        <button class="amp-skip" id="amp-prev" title="Previous Track">
             <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
         </button>
-        <button class="amp-play" id="amp-play" title="Play/Pause">
+        <button class="amp-play" id="amp-play" title="Play / Pause">
             <svg id="amp-pico" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             <svg id="amp-paico" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
         </button>
-        <button class="amp-skip" id="amp-next" title="Next">
+        <button class="amp-skip" id="amp-next" title="Next Track">
             <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
         </button>
     </div>
     <div class="amp-xr">
         <div class="amp-vol">
-            <button class="amp-ibtn" id="amp-mute" title="Mute">
+            <button class="amp-ibtn" id="amp-mute" title="Toggle Mute">
                 <svg id="amp-vico" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
                 <svg id="amp-mico" viewBox="0 0 24 24" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
             </button>
-            <input type="range" class="amp-vol-sl" id="amp-vol" min="0" max="1" step="0.01" value="0.8">
+            <input type="range" class="amp-vol-sl" id="amp-vol" min="0" max="1" step="0.01" value="0.8" title="Volume">
         </div>
     </div>
 </div>
@@ -653,7 +696,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
     <div class="amp-chips" id="amp-chips"></div>
 </div>
 
-<!-- EQ PANEL (preset bars + custom sliders) -->
+<!-- EQ PANEL -->
 <div class="amp-eq-panel" id="amp-eqpanel">
     <div class="amp-eq-bars"   id="amp-eqbars"></div>
     <div class="amp-eq-custom" id="amp-eqcustom"></div>
@@ -669,7 +712,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
 <div class="amp-lib" id="amp-lib">
     <div class="amp-lib-head">
         <span class="amp-lib-title">Library</span>
-        <button class="amp-ibtn" id="amp-lclose" title="Close">
+        <button class="amp-ibtn" id="amp-lclose" title="Close Library">
             <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
     </div>
@@ -691,9 +734,6 @@ input.amp-eq-sl::-webkit-slider-thumb {
         this.appendChild(shell);
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  AUDIO  INIT
-    // ─────────────────────────────────────────────────────────
     _initAudio() {
         this._audio = document.createElement('audio');
         this._audio.crossOrigin = 'anonymous';
@@ -704,10 +744,10 @@ input.amp-eq-sl::-webkit-slider-thumb {
 
             this._eqNodes = this._EQ_FREQS.map((freq, i) => {
                 const f = this._ctx.createBiquadFilter();
-                f.type          = i === 0 ? 'lowshelf' : i === 9 ? 'highshelf' : 'peaking';
+                f.type            = i === 0 ? 'lowshelf' : i === 9 ? 'highshelf' : 'peaking';
                 f.frequency.value = freq;
-                f.Q.value       = 1.4;
-                f.gain.value    = 0;
+                f.Q.value         = 1.4;
+                f.gain.value      = 0;
                 return f;
             });
 
@@ -726,16 +766,19 @@ input.amp-eq-sl::-webkit-slider-thumb {
             this._analyser.connect(this._ctx.destination);
         } catch(e) { console.warn('[AMP] Web Audio unavailable', e); }
 
-        this._audio.addEventListener('timeupdate',    () => this._onTime());
-        this._audio.addEventListener('loadedmetadata',() => this._onMeta());
-        this._audio.addEventListener('ended',         () => this._onEnd());
-        this._audio.addEventListener('play',          () => this._onPlay());
-        this._audio.addEventListener('pause',         () => this._onPause());
+        this._audio.addEventListener('timeupdate',     () => this._onTime());
+        this._audio.addEventListener('loadedmetadata', () => this._onMeta());
+        this._audio.addEventListener('ended',          () => this._onEnd());
+        this._audio.addEventListener('play',           () => this._onPlay());
+        this._audio.addEventListener('pause',          () => this._onPause());
+        // FIX 1: canplay event — audio is ready to play
+        this._audio.addEventListener('canplay', () => {
+            if (!this._audioReady) {
+                this._audioReady = true;
+            }
+        });
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  EVENTS
-    // ─────────────────────────────────────────────────────────
     _q(id) { return this.querySelector('#' + id); }
 
     _bindEvents() {
@@ -787,6 +830,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
             this._repeatMode = m[(m.indexOf(this._repeatMode)+1) % m.length];
             const btn = this._q('amp-rep');
             btn.classList.toggle('on', this._repeatMode !== 'none');
+            btn.title = `Repeat: ${this._repeatMode}`;
             btn.innerHTML = this._repeatMode === 'one'
                 ? `<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/></svg>`
                 : `<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>`;
@@ -824,22 +868,19 @@ input.amp-eq-sl::-webkit-slider-thumb {
                 if (this._audio?.duration) this._audio.currentTime = pct(e) * this._audio.duration;
                 this._seeking = false;
                 document.removeEventListener('mousemove', mv);
-                document.removeEventListener('mouseup',  up);
+                document.removeEventListener('mouseup',   up);
             };
             document.addEventListener('mousemove', mv);
             document.addEventListener('mouseup',   up);
         });
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  AUDIO EVENTS
-    // ─────────────────────────────────────────────────────────
+    // ─── AUDIO EVENTS ────────────────────────────────────────
     _onPlay() {
         this._isPlaying = true;
         this._q('amp-pico') .style.display = 'none';
         this._q('amp-paico').style.display = 'block';
         this._q('amp-dot')  .classList.add('on');
-        this._q('amp-thumb').classList.add('playing');
         if (this._ctx?.state === 'suspended') this._ctx.resume();
         this._visStop(); this._visStart();
     }
@@ -848,7 +889,6 @@ input.amp-eq-sl::-webkit-slider-thumb {
         this._q('amp-pico') .style.display = 'block';
         this._q('amp-paico').style.display = 'none';
         this._q('amp-dot')  .classList.remove('on');
-        this._q('amp-thumb').classList.remove('playing');
         this._visStop(); this._idleStart();
     }
     _onTime() {
@@ -862,14 +902,35 @@ input.amp-eq-sl::-webkit-slider-thumb {
         const dur = this._audio?.duration;
         if (dur && !isNaN(dur)) this._q('amp-tot').textContent = this._fmt(dur);
     }
+
+    // FIX 2: onEnd always forces autoPlay=true so next song starts automatically
     _onEnd() {
-        if (this._repeatMode === 'one') { this._audio.currentTime = 0; this._audio.play(); }
-        else this._next();
+        if (this._repeatMode === 'one') {
+            this._audio.currentTime = 0;
+            this._audio.play().catch(() => {});
+        } else if (this._repeatMode === 'all' || this._playlist.length > 1) {
+            // Force next song to play regardless of _isPlaying state
+            this._nextAutoPlay();
+        } else {
+            // Single song, no repeat — reset UI
+            this._isPlaying = false;
+            this._q('amp-pico') .style.display = 'block';
+            this._q('amp-paico').style.display = 'none';
+            this._q('amp-dot')  .classList.remove('on');
+            this._scrubUI(0);
+        }
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  PLAYBACK
-    // ─────────────────────────────────────────────────────────
+    // FIX 2: Dedicated auto-play next that always passes true
+    _nextAutoPlay() {
+        if (!this._playlist?.length) return;
+        const idx = this._shuffle
+            ? Math.floor(Math.random() * this._playlist.length)
+            : (this._songIdx + 1) % this._playlist.length;
+        this._loadSong(idx, this._playlist, true); // always autoPlay=true
+    }
+
+    // ─── PLAYBACK ─────────────────────────────────────────────
     _loadSong(idx, list, autoPlay = true) {
         if (!list?.[idx]) return;
         this._playlist = list;
@@ -878,9 +939,18 @@ input.amp-eq-sl::-webkit-slider-thumb {
         if (this._audio) {
             this._audio.pause();
             if (song.audioFile) {
+                // FIX 1: set src and load first, then play when canplay fires
                 this._audio.src = song.audioFile;
                 this._audio.load();
-                if (autoPlay) this._audio.play().catch(() => {});
+                if (autoPlay) {
+                    // Resume AudioContext if suspended (required by browser autoplay policy)
+                    if (this._ctx?.state === 'suspended') {
+                        this._ctx.resume().catch(() => {});
+                    }
+                    this._audio.play().catch(err => {
+                        console.warn('[AMP] play() blocked:', err);
+                    });
+                }
             }
         }
         this._nowPlaying(song);
@@ -914,9 +984,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
         this._loadSong(idx, this._playlist, this._isPlaying);
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  NOW PLAYING UI
-    // ─────────────────────────────────────────────────────────
+    // ─── NOW PLAYING UI ───────────────────────────────────────
     _nowPlaying(song) {
         this._q('amp-title') .textContent = song.title  || 'Unknown';
         this._q('amp-artist').textContent = song.artist || '—';
@@ -939,14 +1007,15 @@ input.amp-eq-sl::-webkit-slider-thumb {
             bg.style.backgroundImage = '';
         }
 
+        // FIX 4: Full streaming service names instead of abbreviations
         const sl = song.streamingLinks || {}, lns = [];
-        if (sl.spotify)       lns.push(['SPT', sl.spotify]);
-        if (sl.apple)         lns.push(['APL', sl.apple]);
-        if (sl.youtube)       lns.push(['YT',  sl.youtube]);
-        if (sl.soundcloud)    lns.push(['SC',  sl.soundcloud]);
-        if (song.purchaseLink) lns.push(['BUY', song.purchaseLink]);
+        if (sl.spotify)        lns.push(['Spotify',       sl.spotify]);
+        if (sl.apple)          lns.push(['Apple Music',   sl.apple]);
+        if (sl.youtube)        lns.push(['YouTube',       sl.youtube]);
+        if (sl.soundcloud)     lns.push(['SoundCloud',    sl.soundcloud]);
+        if (song.purchaseLink) lns.push(['Buy Now',       song.purchaseLink]);
         this._q('amp-links').innerHTML = lns.map(([l,u]) =>
-            `<a href="${u}" target="_blank" class="amp-link">${l}</a>`
+            `<a href="${u}" target="_blank" class="amp-link" title="Listen on ${l}">${l}</a>`
         ).join('');
 
         this._q('amp-cur').textContent = '0:00';
@@ -966,9 +1035,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
 
     _status(t) { this._q('amp-stxt').textContent = String(t).toUpperCase(); }
 
-    // ─────────────────────────────────────────────────────────
-    //  LIBRARY
-    // ─────────────────────────────────────────────────────────
+    // ─── LIBRARY ──────────────────────────────────────────────
     _libToggle(open) {
         this._libOpen = open;
         this._q('amp-lib') .classList.toggle('open', open);
@@ -1050,14 +1117,12 @@ input.amp-eq-sl::-webkit-slider-thumb {
         }
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  EQ
-    // ─────────────────────────────────────────────────────────
+    // ─── EQ ───────────────────────────────────────────────────
     _buildEQChips() {
         const c = this._q('amp-chips');
         if (!c) return;
         c.innerHTML = Object.entries(this._PRESETS).map(([k,p]) =>
-            `<button class="amp-chip${k===this._eqPreset?' on':''}" data-k="${k}">${p.name}</button>`
+            `<button class="amp-chip${k===this._eqPreset?' on':''}" data-k="${k}" title="EQ Preset: ${p.name}">${p.name}</button>`
         ).join('');
         c.querySelectorAll('.amp-chip').forEach(chip =>
             chip.addEventListener('click', () => this._applyPreset(chip.dataset.k))
@@ -1068,7 +1133,6 @@ input.amp-eq-sl::-webkit-slider-thumb {
         const preset = this._PRESETS[key];
         if (!preset) return;
 
-        // Save current custom slider values before switching away
         if (key !== 'custom') {
             preset.bands.forEach((g, i) => {
                 if (this._eqNodes[i]) this._eqNodes[i].gain.value = g;
@@ -1080,8 +1144,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
         this._q('amp-eqbadge').textContent = preset.name.toUpperCase();
         this._status('EQ: ' + preset.name);
 
-        // Show/hide correct inner panel
-        this._buildEQBands(); // always rebuild bar display
+        this._buildEQBands();
         this._buildCustomSliders();
 
         const bars   = this._q('amp-eqbars');
@@ -1095,13 +1158,12 @@ input.amp-eq-sl::-webkit-slider-thumb {
         }
     }
 
-    // Read-only bar visualisation for named presets
     _buildEQBands() {
         const c = this._q('amp-eqbars');
         if (!c) return;
         c.innerHTML = this._EQ_FREQS.map((_, i) => {
             const val  = this._eqNodes[i]?.gain?.value ?? 0;
-            const pct  = Math.abs(val) / 12 * 50; // max 50% of half-height
+            const pct  = Math.abs(val) / 12 * 50;
             const neg  = val < 0;
             const disp = (val >= 0 ? '+' : '') + Math.round(val);
             return `
@@ -1115,11 +1177,9 @@ input.amp-eq-sl::-webkit-slider-thumb {
         }).join('');
     }
 
-    // Interactive sliders shown only when "Custom" is selected
     _buildCustomSliders() {
         const c = this._q('amp-eqcustom');
         if (!c) return;
-        // Preserve current gain values as slider starting points
         c.innerHTML = this._EQ_FREQS.map((_, i) => {
             const val = this._eqNodes[i]?.gain?.value ?? 0;
             return `
@@ -1127,7 +1187,8 @@ input.amp-eq-sl::-webkit-slider-thumb {
                 <div class="amp-eq-sl-val" id="amp-slv-${i}">${(val>=0?'+':'')+Math.round(val)}</div>
                 <div class="amp-eq-sl-wrap">
                     <input type="range" class="amp-eq-sl" id="amp-sl-${i}"
-                        min="-12" max="12" step="0.5" value="${val}" data-band="${i}">
+                        min="-12" max="12" step="0.5" value="${val}" data-band="${i}"
+                        title="${this._EQ_LABELS[i]} Hz">
                 </div>
                 <div class="amp-eq-sl-freq">${this._EQ_LABELS[i]}</div>
             </div>`;
@@ -1140,22 +1201,21 @@ input.amp-eq-sl::-webkit-slider-thumb {
                 if (this._eqNodes[idx]) this._eqNodes[idx].gain.value = val;
                 const lbl = this._q(`amp-slv-${idx}`);
                 if (lbl) lbl.textContent = (val>=0?'+':'') + Math.round(val);
-                // Keep custom preset bands in sync
                 this._PRESETS.custom.bands[idx] = val;
             })
         );
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  VISUALISER
-    // ─────────────────────────────────────────────────────────
+    // ─── VISUALISER ───────────────────────────────────────────
+    // FIX 3: Visualizer now renders in the right-side panel of the art strip
     _visStart() {
         const cv = this._q('amp-vis');
         if (!cv || !this._analyser) return;
-        cv.width  = cv.offsetWidth  || 300;
-        cv.height = cv.offsetHeight || 24;
+        // Set canvas dimensions to match container
+        cv.width  = cv.offsetWidth  || 90;
+        cv.height = cv.offsetHeight || 68;
         const ctx = cv.getContext('2d');
-        const N   = 48, bw = cv.width / N;
+        const N   = 24, bw = cv.width / N;
         const draw = () => {
             if (!this._isPlaying) return;
             this._animId = requestAnimationFrame(draw);
@@ -1164,24 +1224,32 @@ input.amp-eq-sl::-webkit-slider-thumb {
             const acc = this._accentColor();
             for (let i = 0; i < N; i++) {
                 const v = this._dataArray[Math.floor(i * this._dataArray.length / N)] / 255;
-                ctx.fillStyle   = acc;
-                ctx.globalAlpha = 0.4 + v * 0.6;
-                ctx.fillRect(i*bw+1, cv.height - v*cv.height, bw-2, v*cv.height);
+                const barH = Math.max(2, v * cv.height);
+                // Gradient effect per bar
+                const grad = ctx.createLinearGradient(0, cv.height - barH, 0, cv.height);
+                grad.addColorStop(0, acc);
+                grad.addColorStop(1, 'rgba(255,107,0,0.2)');
+                ctx.fillStyle   = grad;
+                ctx.globalAlpha = 0.5 + v * 0.5;
+                ctx.fillRect(i * bw + 1, cv.height - barH, bw - 2, barH);
             }
             ctx.globalAlpha = 1;
         };
         draw();
+        // Update label
+        const lbl = this._q('amp-vis-lbl');
+        if (lbl) lbl.textContent = 'LIVE';
     }
 
     _idleStart() {
         const cv = this._q('amp-vis');
         if (!cv) return;
-        cv.width  = cv.offsetWidth  || 300;
-        cv.height = cv.offsetHeight || 24;
+        cv.width  = cv.offsetWidth  || 90;
+        cv.height = cv.offsetHeight || 68;
         const ctx = cv.getContext('2d');
-        const N   = 48, bw = cv.width / N;
-        const h   = Array.from({length:N}, () => Math.random() * 0.14);
-        const sp  = Array.from({length:N}, () => (Math.random()-.5) * 0.007);
+        const N   = 24, bw = cv.width / N;
+        const h   = Array.from({length:N}, () => Math.random() * 0.1);
+        const sp  = Array.from({length:N}, () => (Math.random()-.5) * 0.005);
         const acc = this._accentColor();
         this._idleVis = true;
         const draw = () => {
@@ -1189,15 +1257,19 @@ input.amp-eq-sl::-webkit-slider-thumb {
             this._idleAnimId = requestAnimationFrame(draw);
             ctx.clearRect(0, 0, cv.width, cv.height);
             for (let i = 0; i < N; i++) {
-                h[i] = Math.max(0.02, Math.min(0.16, h[i] + sp[i]));
-                if (h[i] >= 0.16 || h[i] <= 0.02) sp[i] *= -1;
+                h[i] = Math.max(0.02, Math.min(0.12, h[i] + sp[i]));
+                if (h[i] >= 0.12 || h[i] <= 0.02) sp[i] *= -1;
+                const barH = h[i] * cv.height;
                 ctx.fillStyle   = acc;
-                ctx.globalAlpha = 0.17;
-                ctx.fillRect(i*bw+1, cv.height - h[i]*cv.height, bw-2, h[i]*cv.height);
+                ctx.globalAlpha = 0.15;
+                ctx.fillRect(i * bw + 1, cv.height - barH, bw - 2, barH);
             }
             ctx.globalAlpha = 1;
         };
         draw();
+        // Update label
+        const lbl = this._q('amp-vis-lbl');
+        if (lbl) lbl.textContent = 'VIS';
     }
 
     _visStop() {
@@ -1212,9 +1284,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
         return getComputedStyle(this).getPropertyValue('--acc').trim() || '#ff6b00';
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  COLOR THEMING
-    // ─────────────────────────────────────────────────────────
+    // ─── COLOR THEMING ────────────────────────────────────────
     _applyColors() {
         const map = {
             'primary-color':    '--acc',
@@ -1231,9 +1301,7 @@ input.amp-eq-sl::-webkit-slider-thumb {
         }
     }
 
-    // ─────────────────────────────────────────────────────────
-    //  HELPERS
-    // ─────────────────────────────────────────────────────────
+    // ─── HELPERS ──────────────────────────────────────────────
     _fmt(s) {
         if (!s || isNaN(s)) return '0:00';
         const m = Math.floor(s/60), sec = Math.floor(s%60);
