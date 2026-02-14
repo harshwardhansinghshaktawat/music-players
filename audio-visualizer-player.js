@@ -1,28 +1,26 @@
 // ============================================================
-//  audio-reactive-player  —  Wix Blocks Custom Element
-//  Complete rewrite — v3
+//  bottom-bar-player  —  Wix Blocks Custom Element
+//  Spotify-style sticky bottom player bar
 //
-//  VISUALISER DESIGN:
-//  • IcosahedronGeometry — rendered as POINTS (particles), not wireframe
-//  • Ambient wobble: very subtle continuous pnoise animation (~5% of range)
-//  • Kick detection: transient onset detector on low bass bins (20–80 Hz range)
-//    - Detects SHARP amplitude increases, not sustained average
-//    - Kick triggers a spike that decays with an exponential envelope
-//    - Completely ignores mids/highs — only the thump matters
-//  • Particle point size also pulses on kick for extra impact
-//  • UnrealBloom post-processing: subtle (strength 0.35, radius 0.7)
-//  • Mouse parallax camera drift
-//  • Transparent glass control bar
-//  • Library slide-in panel
-//  • Same Wix Blocks attribute API as all previous widgets
+//  LAYOUT  (fixed to bottom, full viewport width, 72px tall):
+//
+//  ┌─────────────────────────────────────────────────────────┐
+//  ░░░░░░░░░░░░░░░░ progress bar (top edge) ░░░░░░░░░░░░░░░░░
+//  │ [art][title·artist][♡]  [⇄][⏮][▶][⏭][⟳]  [vol][queue]│
+//  └─────────────────────────────────────────────────────────┘
+//
+//  • Appends fixed bar directly to document.body
+//  • Injects 72px padding-bottom on body so content isn't hidden
+//  • Queue drawer slides up from the right above the bar
+//  • Streaming links flyout above album art on click
+//  • Kick-pulse ring on album art synced to beat
+//  • Same attribute API / CMS integration as all prior widgets
 // ============================================================
 
-class AudioReactivePlayer extends HTMLElement {
+class BottomBarPlayer extends HTMLElement {
 
     constructor() {
         super();
-
-        // ── Player state ──
         this._allSongs    = [];
         this._playlist    = [];
         this._songIdx     = -1;
@@ -30,38 +28,29 @@ class AudioReactivePlayer extends HTMLElement {
         this._volume      = 0.8;
         this._lastVolume  = 0.8;
         this._shuffle     = false;
-        this._repeatMode  = 'none';   // 'none' | 'all' | 'one'
+        this._repeatMode  = 'none';  // 'none' | 'all' | 'one'
         this._seeking     = false;
         this._domReady    = false;
         this._pendingLoad = null;
+        this._drawerOpen  = false;
+        this._linksOpen   = false;
 
-        // ── Audio graph ──
-        this._audio          = null;
-        this._audioCtx       = null;
-        this._gainNode       = null;
-        this._analyserKick   = null;   // analyser for kick detection
-        this._kickData       = null;   // Uint8Array frequency data
-        this._kickEnvelope   = 0;      // current kick spike [0..1], decays in render loop
+        // Audio
+        this._audio        = null;
+        this._audioCtx     = null;
+        this._gainNode     = null;
+        this._analyser     = null;
+        this._kickData     = null;
+        this._kickEnvelope = 0;
 
-        // ── Three.js ──
-        this._renderer  = null;
-        this._scene     = null;
-        this._camera    = null;
-        this._points    = null;        // THREE.Points (particles)
-        this._composer  = null;
-        this._clock     = null;
-        this._animId    = null;
-        this._uniforms  = null;
-        this._mouseX    = 0;
-        this._mouseY    = 0;
-
-        // ── Sphere colour (set by primary-color attr) ──
-        this._colR = 1.0;
-        this._colG = 1.0;
-        this._colB = 1.0;
+        // Theme
+        this._colAcc  = '#1db954';
+        this._colBg   = '#181818';
+        this._colSurf = '#282828';
+        this._colT1   = '#ffffff';
+        this._colT2   = '#b3b3b3';
     }
 
-    // ── Observed attributes ───────────────────────────────────
     static get observedAttributes() {
         return [
             'player-data', 'player-name',
@@ -71,61 +60,28 @@ class AudioReactivePlayer extends HTMLElement {
         ];
     }
 
-    attributeChangedCallback(name, _, newVal) {
-        if (!newVal) return;
-
+    attributeChangedCallback(name, _, val) {
+        if (!val) return;
         if (name === 'player-data') {
             try {
-                const data = JSON.parse(newVal);
-                this._allSongs = data.songs || [];
+                const d = JSON.parse(val);
+                this._allSongs = d.songs || [];
                 if (this._allSongs.length && this._songIdx === -1) {
                     if (this._domReady) this._loadSong(0, this._allSongs, false);
                     else this._pendingLoad = { idx: 0, list: this._allSongs, autoPlay: false };
                 }
-            } catch(e) { console.error('[ARP] player-data parse error', e); }
-
-        } else if (name === 'player-name') {
-            const el = this.querySelector('#arp-brand');
-            if (el) el.textContent = newVal;
-
-        } else if (name === 'primary-color') {
-            const rgb = this._hex01(newVal);
-            if (rgb) {
-                this._colR = rgb.r; this._colG = rgb.g; this._colB = rgb.b;
-                if (this._uniforms) {
-                    this._uniforms.u_r.value = rgb.r;
-                    this._uniforms.u_g.value = rgb.g;
-                    this._uniforms.u_b.value = rgb.b;
-                }
-            }
+            } catch (e) { console.error('[BBP] player-data error', e); }
+        } else {
+            this._applyThemeProp(name, val);
         }
-        // Other colour attrs: the glass controls are intentionally greyscale,
-        // so they require no theming beyond the sphere colour.
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────
     connectedCallback() {
         this._injectCSS();
         this._buildDOM();
         this._bindEvents();
         this._initAudio();
         this._domReady = true;
-
-        // Load Three r128 core, then post-processing scripts
-        const cdn = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-        const jsd = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js';
-        this._loadScripts([
-            cdn,
-            `${jsd}/postprocessing/EffectComposer.js`,
-            `${jsd}/postprocessing/RenderPass.js`,
-            `${jsd}/postprocessing/ShaderPass.js`,
-            `${jsd}/shaders/CopyShader.js`,
-            `${jsd}/shaders/LuminosityHighPassShader.js`,
-            `${jsd}/postprocessing/UnrealBloomPass.js`,
-        ]).then(() => {
-            this._initThree();
-            this._loop();
-        });
 
         if (this._pendingLoad) {
             const { idx, list, autoPlay } = this._pendingLoad;
@@ -137,739 +93,656 @@ class AudioReactivePlayer extends HTMLElement {
     }
 
     disconnectedCallback() {
-        cancelAnimationFrame(this._animId);
         this._audio?.pause();
         this._audioCtx?.close().catch(() => {});
-        this._renderer?.dispose();
-        this._renderer = null;
-        this._ro?.disconnect();
-        document.removeEventListener('mousemove', this._mmHandler);
+        cancelAnimationFrame(this._animId);
+        // Remove DOM nodes appended to body
+        document.getElementById('bbp-bar')      ?.remove();
+        document.getElementById('bbp-drawer')   ?.remove();
+        document.getElementById('bbp-links-pop')?.remove();
+        document.querySelector('style[data-bbp]')?.remove();
+        document.body.style.paddingBottom = '';
+        document.removeEventListener('click', this._docClickHandler);
     }
 
     // ─────────────────────────────────────────────────────────
-    //  CSS
+    //  CSS  (injected once into <head>)
     // ─────────────────────────────────────────────────────────
     _injectCSS() {
-        if (this.querySelector('style[data-arp]')) return;
+        if (document.querySelector('style[data-bbp]')) return;
         const s = document.createElement('style');
-        s.setAttribute('data-arp', '1');
+        s.setAttribute('data-bbp', '1');
         s.textContent = `
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 
-audio-reactive-player {
-    display: block; width: 100%; height: 100%;
-    height: -webkit-fill-available; box-sizing: border-box;
+/* ── Variables (overridden via JS when theme props change) ── */
+:root {
+    --bbp-acc:   #1db954;
+    --bbp-bg:    #181818;
+    --bbp-surf:  #282828;
+    --bbp-t1:    #ffffff;
+    --bbp-t2:    #b3b3b3;
+    --bbp-t3:    #535353;
+    --bbp-bdr:   rgba(255,255,255,.08);
+    --bbp-kick:  29, 185, 84;
+}
+
+/* ── The bar ── */
+#bbp-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 72px;
+    background: var(--bbp-bg);
+    border-top: 1px solid var(--bbp-bdr);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    z-index: 9999;
+    box-shadow: 0 -2px 16px rgba(0,0,0,.5);
     font-family: 'Rajdhani', sans-serif;
-    --mono: 'Share Tech Mono', monospace;
-}
-audio-reactive-player *,
-audio-reactive-player *::before,
-audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-/* ── Shell ── */
-.arp-shell {
-    width: 100%; height: 100%; background: #000;
-    display: flex; flex-direction: column;
-    overflow: hidden; position: relative;
+    user-select: none;
 }
 
-/* ── Canvas area — takes all remaining space ── */
-.arp-stage {
-    flex: 1; position: relative; overflow: hidden; min-height: 0;
+/* ── Progress bar — thin strip along very top edge ── */
+#bbp-prog {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,.12);
+    cursor: pointer;
+    z-index: 2;
+    transition: height .15s;
 }
-#arp-canvas { display: block; width: 100% !important; height: 100% !important; }
+#bbp-prog:hover { height: 5px; }
+#bbp-pfill {
+    height: 100%;
+    background: var(--bbp-t2);
+    width: 0%;
+    transition: width .1s linear;
+    position: relative;
+    pointer-events: none;
+}
+#bbp-pfill::after {
+    content: '';
+    position: absolute;
+    right: -5px; top: 50%;
+    transform: translateY(-50%);
+    width: 10px; height: 10px;
+    background: var(--bbp-t1);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity .15s;
+}
+#bbp-prog:hover #bbp-pfill { background: var(--bbp-acc); }
+#bbp-prog:hover #bbp-pfill::after { opacity: 1; }
 
-/* ── HUD elements overlaid on canvas ── */
-#arp-brand {
-    position: absolute; top: 13px; left: 50%; transform: translateX(-50%);
-    font-size: 10px; font-weight: 600; letter-spacing: .22em;
-    text-transform: uppercase; color: rgba(255,255,255,.16);
-    font-family: var(--mono); pointer-events: none; white-space: nowrap; z-index: 4;
+/* ── LEFT zone ── */
+.bbp-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    min-width: 0;
+    overflow: hidden;
 }
-#arp-dot {
-    position: absolute; top: 15px; right: 13px;
-    width: 5px; height: 5px; border-radius: 50%;
-    background: rgba(255,255,255,.1); z-index: 4;
-    transition: background .3s, box-shadow .3s;
+
+/* Album art */
+.bbp-art-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 48px; height: 48px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bbp-surf);
+    cursor: pointer;
 }
-#arp-dot.on { background: #22c55e; box-shadow: 0 0 7px rgba(34,197,94,.6); }
-#arp-lbtn {
-    position: absolute; top: 9px; left: 11px; z-index: 5;
-    width: 26px; height: 26px;
-    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
-    border-radius: 3px; cursor: pointer;
+.bbp-art-wrap img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+    position: absolute; inset: 0;
+    transition: transform .3s;
+}
+.bbp-art-wrap:hover img { transform: scale(1.06); }
+.bbp-art-ph {
+    width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
-    color: rgba(255,255,255,.28); padding: 0;
-    transition: color .15s, border-color .15s, background .15s;
+    color: var(--bbp-t3);
 }
-#arp-lbtn:hover, #arp-lbtn.on {
-    color: #fff; border-color: rgba(255,255,255,.28); background: rgba(255,255,255,.08);
-}
-#arp-lbtn svg { width: 13px; height: 13px; fill: currentColor; }
+.bbp-art-ph svg { width: 20px; height: 20px; fill: currentColor; }
 
-/* ── Song info — bottom-left inside stage ── */
-.arp-info {
-    position: absolute; bottom: 14px; left: 14px; right: 14px;
-    pointer-events: none; z-index: 4;
+/* Kick pulse ring on art */
+@keyframes bbp-kick-ring {
+    0%   { box-shadow: 0 0 0 0px rgba(var(--bbp-kick), .8); }
+    100% { box-shadow: 0 0 0 10px rgba(var(--bbp-kick), 0); }
 }
-.arp-info-title {
-    font-size: 20px; font-weight: 700; line-height: 1.1; color: #fff;
+.bbp-art-wrap.kick { animation: bbp-kick-ring .35s ease-out forwards; }
+
+/* Song meta */
+.bbp-meta {
+    flex: 1;
+    min-width: 0;
+}
+.bbp-meta-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--bbp-t1);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    letter-spacing: .01em;
+    cursor: pointer; line-height: 1.4;
+    transition: color .15s;
+    display: inline-block; max-width: 100%;
 }
-.arp-info-artist {
-    font-size: 11px; color: rgba(255,255,255,.4);
-    letter-spacing: .12em; text-transform: uppercase;
-    font-family: var(--mono); margin-top: 3px;
+.bbp-meta-title:hover { color: var(--bbp-acc); text-decoration: underline; }
+.bbp-meta-artist {
+    font-size: 11px; color: var(--bbp-t2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer; line-height: 1.4;
+    transition: color .15s; display: block;
 }
-.arp-links {
-    display: flex; gap: 4px; margin-top: 6px;
-    flex-wrap: wrap; pointer-events: all;
-}
-.arp-link {
-    padding: 2px 7px; font-size: 9px; font-weight: 600;
-    letter-spacing: .07em; text-transform: uppercase;
-    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
-    color: rgba(255,255,255,.45); border-radius: 2px;
-    text-decoration: none; font-family: var(--mono);
-    transition: background .15s, color .15s;
-}
-.arp-link:hover { background: rgba(255,255,255,.13); color: #fff; }
+.bbp-meta-artist:hover { color: var(--bbp-t1); }
 
-/* ── Transparent controls strip ── */
-.arp-controls {
-    flex-shrink: 0; z-index: 10;
-    background: rgba(0,0,0,.5);
-    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    border-top: 1px solid rgba(255,255,255,.055);
-    padding: 9px 14px 12px;
+/* Like button */
+.bbp-like {
+    flex-shrink: 0;
+    background: transparent; border: none; cursor: pointer; padding: 2px;
+    color: var(--bbp-t3); display: flex; align-items: center; justify-content: center;
+    transition: color .15s, transform .1s;
+}
+.bbp-like:hover { color: var(--bbp-t1); transform: scale(1.1); }
+.bbp-like.on    { color: var(--bbp-acc); }
+.bbp-like svg   { width: 16px; height: 16px; fill: currentColor; }
+
+/* ── CENTER zone ── */
+.bbp-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 0 24px;
+}
+.bbp-transport {
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 
-/* Scrubber */
-.arp-scrub-row { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
-.arp-t { font-size: 10px; font-family: var(--mono); color: rgba(255,255,255,.28); flex-shrink: 0; }
-.arp-t.cur { color: rgba(255,255,255,.5); }
-.arp-scrub {
-    flex: 1; position: relative; height: 2px;
-    background: rgba(255,255,255,.1); border-radius: 2px;
-    cursor: pointer; padding: 8px 0; margin: -8px 0;
+/* Ghost buttons (shuffle, repeat) */
+.bbp-ghost {
+    background: transparent; border: none; cursor: pointer; padding: 2px;
+    color: var(--bbp-t3); display: flex; align-items: center;
+    transition: color .15s, transform .1s; position: relative;
 }
-.arp-sfill {
-    position: absolute; top: 8px; left: 0; height: 2px;
-    background: #fff; border-radius: 2px; width: 0%;
-    pointer-events: none; transition: width .1s linear;
+.bbp-ghost:hover { color: var(--bbp-t1); transform: scale(1.1); }
+.bbp-ghost.on    { color: var(--bbp-acc); }
+.bbp-ghost.on::after {
+    content: '';
+    position: absolute;
+    bottom: -4px; left: 50%;
+    transform: translateX(-50%);
+    width: 4px; height: 4px;
+    background: var(--bbp-acc);
+    border-radius: 50%;
 }
-.arp-sthumb {
-    position: absolute; top: 50%; left: 0%;
-    width: 9px; height: 9px; background: #fff; border-radius: 50%;
-    transform: translate(-50%,-50%);
-    opacity: 0; pointer-events: none; transition: opacity .15s;
-}
-.arp-scrub:hover .arp-sthumb { opacity: 1; }
+.bbp-ghost svg { pointer-events: none; fill: currentColor; }
 
-/* Transport */
-.arp-xport { display: flex; align-items: center; justify-content: space-between; }
-.arp-xl, .arp-xr { display: flex; align-items: center; gap: 4px; }
-.arp-xc { display: flex; align-items: center; gap: 7px; }
+/* Skip buttons */
+.bbp-skip {
+    background: transparent; border: none; cursor: pointer; padding: 2px;
+    color: var(--bbp-t2); display: flex; align-items: center;
+    transition: color .15s, transform .1s;
+}
+.bbp-skip:hover { color: var(--bbp-t1); transform: scale(1.1); }
+.bbp-skip svg   { pointer-events: none; fill: currentColor; }
 
-/* Ghost icon buttons */
-.arp-btn {
-    width: 26px; height: 26px; flex-shrink: 0;
-    background: transparent; border: 1px solid rgba(255,255,255,.08);
-    border-radius: 3px; cursor: pointer;
+/* Play / pause — white circle */
+.bbp-play {
+    width: 36px; height: 36px;
+    background: var(--bbp-t1);
+    border: none; border-radius: 50%; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    color: rgba(255,255,255,.28); padding: 0;
-    transition: color .15s, border-color .15s; position: relative;
+    color: #000; padding: 0; flex-shrink: 0;
+    transition: transform .1s, background .15s;
+    box-shadow: 0 2px 10px rgba(0,0,0,.4);
 }
-.arp-btn:hover { color: rgba(255,255,255,.85); border-color: rgba(255,255,255,.25); }
-.arp-btn.on    { color: #fff; border-color: rgba(255,255,255,.4); }
-.arp-btn svg   { width: 12px; height: 12px; fill: currentColor; pointer-events: none; }
-.arp-btn[title]:hover::after, .arp-playbtn[title]:hover::after, .arp-skipbtn[title]:hover::after {
-    content: attr(title); position: absolute; bottom: calc(100% + 6px); left: 50%;
-    transform: translateX(-50%); background: rgba(0,0,0,.9);
-    color: rgba(255,255,255,.7); font-size: 9px; font-family: var(--mono);
-    white-space: nowrap; padding: 3px 7px; border-radius: 2px;
-    border: 1px solid rgba(255,255,255,.1); pointer-events: none; z-index: 99;
-}
+.bbp-play:hover  { transform: scale(1.07); background: #fff; }
+.bbp-play:active { transform: scale(.94); }
+.bbp-play svg   { pointer-events: none; fill: currentColor; }
 
-/* Play — solid white */
-.arp-playbtn {
-    width: 36px; height: 36px; background: rgba(255,255,255,.9);
-    border: none; border-radius: 3px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    color: #000; padding: 0;
-    transition: background .15s, transform .1s; position: relative;
+/* Times under transport */
+.bbp-times {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-family: 'Share Tech Mono', monospace;
+    color: var(--bbp-t3); line-height: 1;
 }
-.arp-playbtn:hover  { background: #fff; transform: scale(1.04); }
-.arp-playbtn:active { transform: scale(.95); }
-.arp-playbtn svg    { width: 14px; height: 14px; fill: currentColor; }
+.bbp-times .cur { color: var(--bbp-t2); }
 
-/* Skip */
-.arp-skipbtn {
-    width: 28px; height: 28px; flex-shrink: 0;
-    background: transparent; border: 1px solid rgba(255,255,255,.08);
-    border-radius: 3px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    color: rgba(255,255,255,.35); padding: 0;
-    transition: color .15s, border-color .15s; position: relative;
+/* ── RIGHT zone ── */
+.bbp-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 0 16px;
+    overflow: hidden;
 }
-.arp-skipbtn:hover { color: #fff; border-color: rgba(255,255,255,.28); }
-.arp-skipbtn svg   { width: 13px; height: 13px; fill: currentColor; }
 
 /* Volume */
-.arp-vol { display: flex; align-items: center; gap: 5px; }
-.arp-vol-sl {
+.bbp-vol-wrap {
+    display: flex; align-items: center; gap: 6px;
+}
+.bbp-vol-btn {
+    background: transparent; border: none; cursor: pointer; padding: 2px;
+    color: var(--bbp-t2); display: flex; align-items: center;
+    transition: color .15s;
+}
+.bbp-vol-btn:hover { color: var(--bbp-t1); }
+.bbp-vol-btn svg   { width: 16px; height: 16px; fill: currentColor; }
+
+.bbp-vol-sl {
     -webkit-appearance: none; appearance: none;
-    width: 52px; height: 2px; background: rgba(255,255,255,.12);
-    border-radius: 2px; outline: none; cursor: pointer;
+    width: 90px; height: 4px;
+    background: var(--bbp-t3); border-radius: 2px;
+    outline: none; cursor: pointer;
+    transition: background .15s;
 }
-.arp-vol-sl::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 8px; height: 8px;
-    background: #fff; border-radius: 50%; cursor: pointer;
+.bbp-vol-wrap:hover .bbp-vol-sl { background: var(--bbp-t2); }
+.bbp-vol-sl::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    background: var(--bbp-t1); border-radius: 50%; cursor: pointer;
+    opacity: 0; transition: opacity .15s;
 }
-.arp-vol-sl::-moz-range-thumb {
-    width: 8px; height: 8px; background: #fff; border: none; border-radius: 50%;
+.bbp-vol-wrap:hover .bbp-vol-sl::-webkit-slider-thumb { opacity: 1; }
+.bbp-vol-sl::-moz-range-thumb {
+    width: 12px; height: 12px;
+    background: var(--bbp-t1); border: none; border-radius: 50%;
 }
 
-/* ── Library overlay ── */
-.arp-lib {
-    position: absolute; inset: 0; z-index: 30;
-    background: rgba(4,4,4,.97); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
-    transform: translateX(100%); transition: transform .22s cubic-bezier(.4,0,.2,1);
-    display: flex; flex-direction: column; overflow: hidden;
+/* Queue / library button */
+.bbp-qbtn {
+    background: transparent; border: none; cursor: pointer; padding: 4px;
+    color: var(--bbp-t3); display: flex; align-items: center;
+    border-radius: 3px;
+    transition: color .15s, background .15s;
 }
-.arp-lib.open { transform: translateX(0); }
-.arp-lib-head {
-    display: flex; align-items: center; gap: 6px; padding: 10px 14px;
-    border-bottom: 1px solid rgba(255,255,255,.06); flex-shrink: 0;
+.bbp-qbtn:hover { color: var(--bbp-t1); background: rgba(255,255,255,.06); }
+.bbp-qbtn.on    { color: var(--bbp-acc); }
+.bbp-qbtn svg   { width: 16px; height: 16px; fill: currentColor; }
+
+/* ── QUEUE DRAWER (slides up from right above bar) ── */
+#bbp-drawer {
+    position: fixed;
+    bottom: 72px;
+    right: 0;
+    width: 340px;
+    max-height: min(480px, calc(100vh - 90px));
+    background: var(--bbp-surf);
+    border: 1px solid var(--bbp-bdr);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    box-shadow: -4px -4px 40px rgba(0,0,0,.55);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10000;
+    transform: translateY(16px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .2s;
 }
-.arp-lib-lbl {
-    flex: 1; font-size: 10px; font-weight: 600; letter-spacing: .2em;
-    text-transform: uppercase; color: rgba(255,255,255,.3); font-family: var(--mono);
+#bbp-drawer.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: all;
 }
-.arp-lib-close {
-    width: 24px; height: 24px; background: transparent;
-    border: 1px solid rgba(255,255,255,.1); border-radius: 3px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    color: rgba(255,255,255,.3); padding: 0; transition: color .15s, border-color .15s;
+.bbp-dhead {
+    display: flex; align-items: center; padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--bbp-bdr); flex-shrink: 0;
 }
-.arp-lib-close:hover { color: #fff; border-color: rgba(255,255,255,.28); }
-.arp-lib-close svg { width: 11px; height: 11px; fill: currentColor; }
-.arp-srch-wrap {
-    padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,.06);
-    position: relative; flex-shrink: 0;
+.bbp-dhead-title {
+    flex: 1; font-size: 14px; font-weight: 700;
+    color: var(--bbp-t1); letter-spacing: .02em;
+    font-family: 'Rajdhani', sans-serif;
 }
-.arp-srch-wrap svg {
-    position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
-    width: 11px; height: 11px; fill: rgba(255,255,255,.2); pointer-events: none;
+.bbp-dclose {
+    background: transparent; border: none; cursor: pointer; padding: 4px;
+    color: var(--bbp-t3); border-radius: 50%;
+    display: flex; align-items: center;
+    transition: color .15s, background .15s;
 }
-.arp-srch {
-    width: 100%; padding: 6px 8px 6px 26px;
-    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
-    border-radius: 3px; color: #fff; font-size: 12px;
-    font-family: 'Rajdhani', sans-serif; outline: none; transition: border-color .15s;
+.bbp-dclose:hover { color: var(--bbp-t1); background: rgba(255,255,255,.08); }
+.bbp-dclose svg { width: 14px; height: 14px; fill: currentColor; }
+
+/* Drawer search */
+.bbp-dsrch-wrap {
+    padding: 8px 12px; border-bottom: 1px solid var(--bbp-bdr);
+    flex-shrink: 0; position: relative;
 }
-.arp-srch:focus { border-color: rgba(255,255,255,.25); }
-.arp-srch::placeholder { color: rgba(255,255,255,.18); }
-.arp-lib-body { flex: 1; overflow-y: auto; }
-.arp-lib-body::-webkit-scrollbar { width: 3px; }
-.arp-lib-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
-.arp-srow {
+.bbp-dsrch-wrap svg {
+    position: absolute; left: 20px; top: 50%; transform: translateY(-50%);
+    width: 13px; height: 13px; fill: var(--bbp-t3); pointer-events: none;
+}
+.bbp-dsrch {
+    width: 100%; padding: 7px 10px 7px 30px;
+    background: rgba(255,255,255,.06); border: 1px solid transparent;
+    border-radius: 4px; color: var(--bbp-t1);
+    font-size: 13px; font-family: 'Rajdhani', sans-serif;
+    outline: none; transition: border-color .15s;
+}
+.bbp-dsrch:focus { border-color: var(--bbp-t3); }
+.bbp-dsrch::placeholder { color: var(--bbp-t3); }
+
+.bbp-dbody { flex: 1; overflow-y: auto; padding: 6px 0; }
+.bbp-dbody::-webkit-scrollbar { width: 4px; }
+.bbp-dbody::-webkit-scrollbar-thumb { background: var(--bbp-t3); border-radius: 2px; }
+
+/* Song rows in drawer */
+.bbp-srow {
     display: flex; align-items: center; gap: 10px;
-    padding: 7px 14px; border-bottom: 1px solid rgba(255,255,255,.04);
-    cursor: pointer; transition: background .1s;
+    padding: 6px 12px; border-radius: 4px; cursor: pointer;
+    margin: 0 4px; transition: background .1s;
 }
-.arp-srow:hover { background: rgba(255,255,255,.03); }
-.arp-srow.on { background: rgba(255,255,255,.05); border-left: 2px solid rgba(255,255,255,.35); padding-left: 12px; }
-.arp-snum { font-size: 10px; font-family: var(--mono); color: rgba(255,255,255,.18); width: 18px; text-align: right; flex-shrink: 0; }
-.arp-srow.on .arp-snum { color: rgba(255,255,255,.55); }
-.arp-scover { width: 30px; height: 30px; flex-shrink: 0; border-radius: 2px; overflow: hidden; background: rgba(255,255,255,.05); }
-.arp-scover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.arp-smeta { flex: 1; min-width: 0; }
-.arp-sname { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.arp-srow.on .arp-sname { color: #fff; }
-.arp-ssub  { font-size: 10px; color: rgba(255,255,255,.28); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.arp-sdur  { font-size: 10px; font-family: var(--mono); color: rgba(255,255,255,.22); flex-shrink: 0; }
-.arp-bars  { display: none; gap: 2px; align-items: flex-end; width: 14px; height: 14px; flex-shrink: 0; }
-.arp-srow.on .arp-bars { display: flex; }
-.arp-bar   { width: 3px; background: #fff; border-radius: 1px; animation: arp-bar .7s ease-in-out infinite; }
-.arp-bar:nth-child(2) { animation-delay: .15s; }
-.arp-bar:nth-child(3) { animation-delay: .3s; }
-@keyframes arp-bar { 0%,100%{height:3px} 50%{height:12px} }
-.arp-empty { text-align: center; padding: 36px 16px; }
-.arp-empty svg { width: 26px; height: 26px; fill: rgba(255,255,255,.1); margin: 0 auto 10px; display: block; }
-.arp-empty p { font-size: 10px; color: rgba(255,255,255,.18); letter-spacing: .1em; text-transform: uppercase; font-family: var(--mono); }
+.bbp-srow:hover { background: rgba(255,255,255,.08); }
+.bbp-srow.on    { background: rgba(255,255,255,.12); }
+.bbp-snum {
+    font-size: 12px; font-family: 'Share Tech Mono', monospace;
+    color: var(--bbp-t3); width: 18px; text-align: right; flex-shrink: 0;
+}
+.bbp-srow.on .bbp-snum { color: var(--bbp-acc); }
+.bbp-sart {
+    width: 36px; height: 36px; flex-shrink: 0;
+    border-radius: 3px; overflow: hidden; background: var(--bbp-bg);
+    position: relative;
+}
+.bbp-sart img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bbp-sart-ph {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    color: var(--bbp-t3);
+}
+.bbp-sart-ph svg { width: 16px; height: 16px; fill: currentColor; }
+.bbp-smeta { flex: 1; min-width: 0; }
+.bbp-sname {
+    font-size: 13px; font-weight: 600; color: var(--bbp-t1);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bbp-srow.on .bbp-sname { color: var(--bbp-acc); }
+.bbp-ssub {
+    font-size: 11px; color: var(--bbp-t3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bbp-sdur {
+    font-size: 11px; font-family: 'Share Tech Mono', monospace;
+    color: var(--bbp-t3); flex-shrink: 0;
+}
+
+/* Animated bars for active track */
+.bbp-bars { display: none; gap: 2px; align-items: flex-end; width: 14px; height: 14px; flex-shrink: 0; }
+.bbp-srow.on .bbp-bars { display: flex; }
+.bbp-bar {
+    width: 3px; background: var(--bbp-acc);
+    border-radius: 1px; animation: bbp-bar .7s ease-in-out infinite;
+}
+.bbp-bar:nth-child(2) { animation-delay: .15s; }
+.bbp-bar:nth-child(3) { animation-delay: .30s; }
+@keyframes bbp-bar { 0%,100%{height:3px} 50%{height:12px} }
+
+.bbp-empty {
+    padding: 28px 16px; text-align: center;
+    font-size: 12px; color: var(--bbp-t3);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: .06em; text-transform: uppercase;
+}
+
+/* ── LINKS POPUP (above album art) ── */
+#bbp-links-pop {
+    position: fixed;
+    bottom: 82px;
+    left: 16px;
+    background: #333333;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px;
+    padding: 5px;
+    z-index: 10001;
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+    transform: translateY(8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .18s cubic-bezier(.4,0,.2,1), opacity .18s;
+    min-width: 170px;
+}
+#bbp-links-pop.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: all;
+}
+#bbp-links-pop a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 4px;
+    color: #fff; font-size: 13px; font-weight: 500;
+    font-family: 'Rajdhani', sans-serif;
+    text-decoration: none; transition: background .1s;
+    white-space: nowrap;
+}
+#bbp-links-pop a:hover { background: rgba(255,255,255,.1); }
+#bbp-links-pop a svg   { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
+.bbp-links-sep {
+    height: 1px; background: rgba(255,255,255,.1); margin: 3px 0;
+}
+
+/* ── Tooltips ── */
+[data-tip] { position: relative; }
+[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    background: #1a1a1a; color: #fff;
+    font-size: 11px; font-family: 'Share Tech Mono', monospace;
+    white-space: nowrap; padding: 4px 8px;
+    border-radius: 4px; border: 1px solid rgba(255,255,255,.1);
+    pointer-events: none; z-index: 99999;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .bbp-right { gap: 6px; }
+    .bbp-vol-sl { width: 64px; }
+    .bbp-times  { display: none; }
+    .bbp-ghost  { display: none; }
+    .bbp-center { padding: 0 12px; }
+    #bbp-drawer { width: 100%; border-radius: 12px 12px 0 0; }
+}
+@media (max-width: 480px) {
+    .bbp-right { display: none; }
+    .bbp-left  { max-width: 160px; }
+    .bbp-transport { gap: 14px; }
+}
         `;
-        this.appendChild(s);
+        document.head.appendChild(s);
     }
 
     // ─────────────────────────────────────────────────────────
-    //  DOM
+    //  DOM  (appended to document.body, not this element)
     // ─────────────────────────────────────────────────────────
     _buildDOM() {
-        const shell = document.createElement('div');
-        shell.className = 'arp-shell';
-        shell.innerHTML = `
-<div class="arp-stage" id="arp-stage">
-    <canvas id="arp-canvas"></canvas>
+        /* ── BAR ── */
+        const bar = document.createElement('div');
+        bar.id    = 'bbp-bar';
+        bar.innerHTML = `
+<div id="bbp-prog"><div id="bbp-pfill"></div></div>
 
-    <span id="arp-brand">REACTOR</span>
-    <div  id="arp-dot"></div>
-    <button id="arp-lbtn" title="Open Library">
-        <svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 5h-3v5.5c0 1.38-1.12 2.5-2.5 2.5S10 13.88 10 12.5 11.12 10 12.5 10c.57 0 1.08.19 1.5.5V5h4v2zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6z"/></svg>
+<!-- LEFT: art + meta -->
+<div class="bbp-left">
+    <div class="bbp-art-wrap" id="bbp-art-wrap" data-tip="Streaming links">
+        <div class="bbp-art-ph" id="bbp-art-ph">
+            <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </div>
+        <img id="bbp-art" src="" alt="">
+    </div>
+    <div class="bbp-meta">
+        <span class="bbp-meta-title"  id="bbp-title">—</span>
+        <span class="bbp-meta-artist" id="bbp-artist">Select a track from the queue</span>
+    </div>
+    <button class="bbp-like" id="bbp-like" data-tip="Like">
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
     </button>
-    <div class="arp-info">
-        <div class="arp-info-title"  id="arp-title">Select a Track</div>
-        <div class="arp-info-artist" id="arp-artist"></div>
-        <div class="arp-links"       id="arp-links"></div>
-    </div>
 </div>
 
-<div class="arp-controls">
-    <div class="arp-scrub-row">
-        <span class="arp-t cur" id="arp-cur">0:00</span>
-        <div class="arp-scrub" id="arp-scrub">
-            <div class="arp-sfill"  id="arp-sfill"></div>
-            <div class="arp-sthumb" id="arp-sthumb"></div>
-        </div>
-        <span class="arp-t" id="arp-tot">0:00</span>
-    </div>
-    <div class="arp-xport">
-        <div class="arp-xl">
-            <button class="arp-btn" id="arp-shuf" title="Shuffle">
-                <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
-            </button>
-            <button class="arp-btn" id="arp-rep" title="Repeat">
-                <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
-            </button>
-        </div>
-        <div class="arp-xc">
-            <button class="arp-skipbtn" id="arp-prev" title="Previous">
-                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-            </button>
-            <button class="arp-playbtn" id="arp-play" title="Play / Pause">
-                <svg id="arp-ico-play"  viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                <svg id="arp-ico-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-            </button>
-            <button class="arp-skipbtn" id="arp-next" title="Next">
-                <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-            </button>
-        </div>
-        <div class="arp-xr">
-            <div class="arp-vol">
-                <button class="arp-btn" id="arp-mute" title="Mute">
-                    <svg id="arp-ico-vol" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
-                    <svg id="arp-ico-mut" viewBox="0 0 24 24" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
-                </button>
-                <input type="range" class="arp-vol-sl" id="arp-vol" min="0" max="1" step="0.01" value="0.8" title="Volume">
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="arp-lib" id="arp-lib">
-    <div class="arp-lib-head">
-        <span class="arp-lib-lbl">Library</span>
-        <button class="arp-lib-close" id="arp-lclose" title="Close">
-            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+<!-- CENTER: transport + time -->
+<div class="bbp-center">
+    <div class="bbp-transport">
+        <button class="bbp-ghost" id="bbp-shuf" data-tip="Shuffle">
+            <svg width="16" height="16" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+        </button>
+        <button class="bbp-skip" id="bbp-prev" data-tip="Previous">
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button class="bbp-play" id="bbp-play" data-tip="Play">
+            <svg id="bbp-ico-play"  width="16" height="16" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="bbp-ico-pause" width="16" height="16" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <button class="bbp-skip" id="bbp-next" data-tip="Next">
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
+        <button class="bbp-ghost" id="bbp-rep" data-tip="Repeat">
+            <svg id="bbp-rep-svg" width="16" height="16" viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
         </button>
     </div>
-    <div class="arp-srch-wrap">
-        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-        <input type="text" class="arp-srch" id="arp-srch" placeholder="Search tracks...">
+    <div class="bbp-times">
+        <span id="bbp-cur" class="cur">0:00</span>
+        <span style="color:var(--bbp-t3)">·</span>
+        <span id="bbp-tot">0:00</span>
     </div>
-    <div class="arp-lib-body" id="arp-lbody"></div>
+</div>
+
+<!-- RIGHT: volume + queue -->
+<div class="bbp-right">
+    <div class="bbp-vol-wrap">
+        <button class="bbp-vol-btn" id="bbp-mute" data-tip="Mute">
+            <svg id="bbp-vol-ico" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM16.5 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg id="bbp-mut-ico" viewBox="0 0 24 24" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+        </button>
+        <input type="range" class="bbp-vol-sl" id="bbp-vol" min="0" max="1" step="0.01" value="0.8">
+    </div>
+    <button class="bbp-qbtn" id="bbp-qbtn" data-tip="Queue">
+        <svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zm17-4v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4z"/></svg>
+    </button>
 </div>
         `;
-        this.appendChild(shell);
-    }
 
-    // ─────────────────────────────────────────────────────────
-    //  THREE.JS — PARTICLE SPHERE
-    // ─────────────────────────────────────────────────────────
-    _initThree() {
-        const THREE = window.THREE;
-        if (!THREE) { console.warn('[ARP] THREE not loaded'); return; }
-
-        const stage  = this.querySelector('#arp-stage');
-        const canvas = this.querySelector('#arp-canvas');
-        if (!stage || !canvas) return;
-
-        const W = stage.clientWidth  || 480;
-        const H = stage.clientHeight || 320;
-
-        // Renderer
-        this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-        this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        this._renderer.setSize(W, H);
-
-        // Scene + camera
-        this._scene  = new THREE.Scene();
-        this._camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
-        this._camera.position.set(0, 0, 14);
-
-        this._clock = new THREE.Clock();
-
-        // ── pnoise (Ashima periodic — same as tutorial) ────────
-        const pnoiseGLSL = /* glsl */`
-            vec3 mod289v3(vec3 x){return x-floor(x*(1./289.))*289.;}
-            vec4 mod289v4(vec4 x){return x-floor(x*(1./289.))*289.;}
-            vec4 permute4(vec4 x){return mod289v4(((x*34.)+10.)*x);}
-            vec4 tayInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
-            vec3 fade3(vec3 t){return t*t*t*(t*(t*6.-15.)+10.);}
-
-            float pnoise(vec3 P, vec3 rep) {
-                vec3 Pi0=mod(floor(P),rep), Pi1=mod(Pi0+1.,rep);
-                Pi0=mod289v3(Pi0); Pi1=mod289v3(Pi1);
-                vec3 Pf0=fract(P), Pf1=Pf0-1.;
-                vec4 ix=vec4(Pi0.x,Pi1.x,Pi0.x,Pi1.x);
-                vec4 iy=vec4(Pi0.yy,Pi1.yy);
-                vec4 iz0=Pi0.zzzz, iz1=Pi1.zzzz;
-                vec4 ixy=permute4(permute4(ix)+iy);
-                vec4 ixy0=permute4(ixy+iz0), ixy1=permute4(ixy+iz1);
-                vec4 gx0=ixy0*(1./7.), gy0=fract(floor(gx0)*(1./7.))-.5;
-                gx0=fract(gx0);
-                vec4 gz0=vec4(.5)-abs(gx0)-abs(gy0);
-                vec4 sz0=step(gz0,vec4(0.));
-                gx0-=sz0*(step(0.,gx0)-.5); gy0-=sz0*(step(0.,gy0)-.5);
-                vec4 gx1=ixy1*(1./7.), gy1=fract(floor(gx1)*(1./7.))-.5;
-                gx1=fract(gx1);
-                vec4 gz1=vec4(.5)-abs(gx1)-abs(gy1);
-                vec4 sz1=step(gz1,vec4(0.));
-                gx1-=sz1*(step(0.,gx1)-.5); gy1-=sz1*(step(0.,gy1)-.5);
-                vec3 g000=vec3(gx0.x,gy0.x,gz0.x), g100=vec3(gx0.y,gy0.y,gz0.y);
-                vec3 g010=vec3(gx0.z,gy0.z,gz0.z), g110=vec3(gx0.w,gy0.w,gz0.w);
-                vec3 g001=vec3(gx1.x,gy1.x,gz1.x), g101=vec3(gx1.y,gy1.y,gz1.y);
-                vec3 g011=vec3(gx1.z,gy1.z,gz1.z), g111=vec3(gx1.w,gy1.w,gz1.w);
-                vec4 n0=tayInvSqrt(vec4(dot(g000,g000),dot(g010,g010),dot(g100,g100),dot(g110,g110)));
-                g000*=n0.x; g010*=n0.y; g100*=n0.z; g110*=n0.w;
-                vec4 n1=tayInvSqrt(vec4(dot(g001,g001),dot(g011,g011),dot(g101,g101),dot(g111,g111)));
-                g001*=n1.x; g011*=n1.y; g101*=n1.z; g111*=n1.w;
-                float n000=dot(g000,Pf0), n100=dot(g100,vec3(Pf1.x,Pf0.yz));
-                float n010=dot(g010,vec3(Pf0.x,Pf1.y,Pf0.z)), n110=dot(g110,vec3(Pf1.xy,Pf0.z));
-                float n001=dot(g001,vec3(Pf0.xy,Pf1.z)), n101=dot(g101,vec3(Pf1.x,Pf0.y,Pf1.z));
-                float n011=dot(g011,vec3(Pf0.x,Pf1.yz)), n111=dot(g111,Pf1);
-                vec3 fxyz=fade3(Pf0);
-                vec4 nz=mix(vec4(n000,n100,n010,n110),vec4(n001,n101,n011,n111),fxyz.z);
-                vec2 nyz=mix(nz.xy,nz.zw,fxyz.y);
-                return 2.2*mix(nyz.x,nyz.y,fxyz.x);
-            }
+        /* ── QUEUE DRAWER ── */
+        const drawer = document.createElement('div');
+        drawer.id    = 'bbp-drawer';
+        drawer.innerHTML = `
+<div class="bbp-dhead">
+    <span class="bbp-dhead-title">Queue</span>
+    <button class="bbp-dclose" id="bbp-dclose">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
+</div>
+<div class="bbp-dsrch-wrap">
+    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+    <input type="text" class="bbp-dsrch" id="bbp-dsrch" placeholder="Search tracks…">
+</div>
+<div class="bbp-dbody" id="bbp-dbody"></div>
         `;
 
-        // ── Vertex shader ──────────────────────────────────────
-        //
-        //  u_ambient  — very small constant noise animation (0..1, typically 0.08)
-        //               makes the sphere barely breathe when quiet
-        //  u_kick     — kick envelope  [0..1], decays each frame in JS
-        //               displaces each vertex outward along its normal
-        //               Effect: sphere spikes outward on every kick thump
-        //  u_size     — base particle point size, also pulses with kick
-        //
-        const vertexShader = /* glsl */`
-            ${pnoiseGLSL}
+        /* ── LINKS POPUP ── */
+        const linksPop = document.createElement('div');
+        linksPop.id = 'bbp-links-pop';
 
-            uniform float u_time;
-            uniform float u_ambient;   // subtle ambient wave [0..~0.08]
-            uniform float u_kick;      // kick envelope       [0..1]
-            uniform float u_size;      // base particle size
+        document.body.appendChild(bar);
+        document.body.appendChild(drawer);
+        document.body.appendChild(linksPop);
 
-            void main() {
-                // Slow, very subtle organic noise — always running
-                float slowNoise = pnoise(position * 0.8 + u_time * 0.15, vec3(10.0));
-
-                // Ambient displacement: barely perceptible wobble
-                float ambientDisp = slowNoise * u_ambient;
-
-                // Kick displacement: sharp spike along normal
-                // Noise-modulated so each vertex spikes differently (not uniform balloon)
-                float kickNoise   = pnoise(position * 1.6 + u_time * 0.4, vec3(10.0));
-                float kickDisp    = u_kick * (0.55 + kickNoise * 0.45);
-
-                vec3 newPos = position + normal * (ambientDisp + kickDisp);
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
-
-                // Point size: base size + kick pulse
-                gl_PointSize = u_size * (1.0 + u_kick * 1.8);
-            }
-        `;
-
-        // ── Fragment shader ────────────────────────────────────
-        //  Round particles, soft alpha falloff, colour from uniforms
-        //  Brightness increases with kick envelope
-        const fragmentShader = /* glsl */`
-            uniform float u_r, u_g, u_b;
-            uniform float u_kick;
-
-            void main() {
-                // Circular particle — discard corners
-                vec2  uv   = gl_PointCoord - 0.5;
-                float dist = length(uv);
-                if (dist > 0.5) discard;
-
-                // Soft radial falloff
-                float alpha = 1.0 - smoothstep(0.2, 0.5, dist);
-
-                // Brightness: base 0.7, peaks at 1.0 on kick
-                float bright = 0.7 + u_kick * 0.3;
-
-                gl_FragColor = vec4(u_r * bright, u_g * bright, u_b * bright, alpha);
-            }
-        `;
-
-        // ── Uniforms ───────────────────────────────────────────
-        this._uniforms = {
-            u_time:    { value: 0.0 },
-            u_ambient: { value: 0.08 },   // very subtle — tune here if needed
-            u_kick:    { value: 0.0 },
-            u_size:    { value: 2.5 },
-            u_r:       { value: this._colR },
-            u_g:       { value: this._colG },
-            u_b:       { value: this._colB },
-        };
-
-        // ── Geometry: IcosahedronGeometry, rendered as Points ──
-        //  detail=30 gives ~27,492 vertices — rich particle cloud
-        const geo = new THREE.IcosahedronGeometry(4, 30);
-        const mat = new THREE.ShaderMaterial({
-            uniforms: this._uniforms,
-            vertexShader,
-            fragmentShader,
-            transparent: true,
-            depthWrite:  false,
-        });
-
-        this._points = new THREE.Points(geo, mat);
-        this._scene.add(this._points);
-
-        // ── UnrealBloom — subtle settings, not overdone ────────
-        try {
-            const EC  = THREE.EffectComposer  || window.EffectComposer;
-            const RP  = THREE.RenderPass      || window.RenderPass;
-            const UBP = THREE.UnrealBloomPass || window.UnrealBloomPass;
-
-            if (EC && RP && UBP) {
-                const renderPass = new RP(this._scene, this._camera);
-                const bloom      = new UBP(new THREE.Vector2(W, H));
-                bloom.threshold  = 0.0;    // glow everything
-                bloom.strength   = 0.35;   // subtle — not the laser-eyes look
-                bloom.radius     = 0.6;
-
-                this._composer = new EC(this._renderer);
-                this._composer.addPass(renderPass);
-                this._composer.addPass(bloom);
-            }
-        } catch(e) {
-            console.warn('[ARP] Bloom unavailable, using direct render:', e);
-        }
-
-        // ── Resize observer ────────────────────────────────────
-        const ro = new ResizeObserver(() => this._onResize());
-        ro.observe(stage);
-        this._ro = ro;
-
-        // ── Mouse parallax ─────────────────────────────────────
-        this._mmHandler = e => {
-            const rect = stage.getBoundingClientRect();
-            this._mouseX = (e.clientX - rect.left  - rect.width  / 2) / 100;
-            this._mouseY = (e.clientY - rect.top   - rect.height / 2) / 100;
-        };
-        document.addEventListener('mousemove', this._mmHandler);
-    }
-
-    _onResize() {
-        if (!this._renderer) return;
-        const stage = this.querySelector('#arp-stage');
-        if (!stage) return;
-        const W = stage.clientWidth, H = stage.clientHeight;
-        if (!W || !H) return;
-        this._camera.aspect = W / H;
-        this._camera.updateProjectionMatrix();
-        this._renderer.setSize(W, H);
-        this._composer?.setSize(W, H);
+        // Push page content up so bar doesn't cover it
+        document.body.style.paddingBottom = '72px';
     }
 
     // ─────────────────────────────────────────────────────────
-    //  RENDER LOOP
-    // ─────────────────────────────────────────────────────────
-    _loop() {
-        this._animId = requestAnimationFrame(() => this._loop());
-        if (!this._renderer || !this._uniforms) return;
-
-        const t = this._clock.getElapsedTime();
-
-        // ── Kick envelope decay ────────────────────────────────
-        //  Exponential decay — fast attack handled by kick detector,
-        //  decay here: ~0.88 per frame ≈ 0 in ~50 frames (~800ms)
-        this._kickEnvelope *= 0.88;
-        if (this._kickEnvelope < 0.001) this._kickEnvelope = 0;
-
-        // ── Update uniforms ────────────────────────────────────
-        this._uniforms.u_time.value    = t;
-        this._uniforms.u_kick.value    = this._kickEnvelope;
-        this._uniforms.u_r.value       = this._colR;
-        this._uniforms.u_g.value       = this._colG;
-        this._uniforms.u_b.value       = this._colB;
-
-        // ── Camera mouse parallax ──────────────────────────────
-        this._camera.position.x += (this._mouseX  - this._camera.position.x) * 0.05;
-        this._camera.position.y += (-this._mouseY - this._camera.position.y) * 0.05;
-        this._camera.lookAt(this._scene.position);
-
-        // ── Slow auto-rotation — only on Y axis, very gentle ──
-        if (this._points) {
-            this._points.rotation.y += 0.0015;
-        }
-
-        // Render
-        if (this._composer) {
-            this._composer.render();
-        } else {
-            this._renderer.render(this._scene, this._camera);
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────
-    //  AUDIO INIT + KICK DETECTION
+    //  AUDIO INIT
     // ─────────────────────────────────────────────────────────
     _initAudio() {
         this._audio = document.createElement('audio');
         this._audio.crossOrigin = 'anonymous';
-
         try {
             this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             this._gainNode = this._audioCtx.createGain();
-
-            // ── Kick analyser: 512 FFT, smoothing 0.75 ────────
-            //  fftSize=512 → bin width ≈ 86 Hz at 44.1kHz
-            //  smoothing=0.75: essential — raw unsmoothed data is
-            //  jittery frame-to-frame even during silence, causing
-            //  constant false triggers. Smoothed envelope gives a
-            //  clean rising edge to measure spectral flux against.
-            this._analyserKick = this._audioCtx.createAnalyser();
-            this._analyserKick.fftSize              = 512;
-            this._analyserKick.smoothingTimeConstant = 0.75;
-            this._kickData = new Uint8Array(this._analyserKick.frequencyBinCount);
-
+            this._analyser = this._audioCtx.createAnalyser();
+            this._analyser.fftSize              = 512;
+            this._analyser.smoothingTimeConstant = 0.75;
+            this._kickData = new Uint8Array(this._analyser.frequencyBinCount);
             const src = this._audioCtx.createMediaElementSource(this._audio);
             src.connect(this._gainNode);
-            this._gainNode.connect(this._analyserKick);
-            this._analyserKick.connect(this._audioCtx.destination);
+            this._gainNode.connect(this._analyser);
+            this._analyser.connect(this._audioCtx.destination);
             this._gainNode.gain.value = this._volume;
-
             this._runKickDetector();
-        } catch(e) {
-            console.warn('[ARP] Web Audio API unavailable', e);
-        }
+        } catch (e) { console.warn('[BBP] Web Audio unavailable', e); }
 
-        this._audio.addEventListener('timeupdate',     () => this._onTimeUpdate());
+        this._audio.addEventListener('timeupdate',     () => this._onTime());
         this._audio.addEventListener('loadedmetadata', () => this._onMeta());
         this._audio.addEventListener('ended',          () => this._onEnded());
         this._audio.addEventListener('play',           () => this._onPlay());
         this._audio.addEventListener('pause',          () => this._onPause());
     }
 
-    // ── Kick detector ─────────────────────────────────────────
-    //
-    //  Technique: spectral flux onset detection on low-bass bins only.
-    //
-    //  WHY this approach works:
-    //  ─────────────────────────────────────────────────────────
-    //  fftSize=512, sampleRate≈44100 → bin width ≈ 86 Hz
-    //  Kick drum fundamentals live at 50–120 Hz → bins 1..2
-    //  (bin 0 = DC component, always garbage — we skip it)
-    //
-    //  We use smoothingTimeConstant=0.75 on the analyser.
-    //  This is CRITICAL: without smoothing, getByteFrequencyData
-    //  returns noisy per-frame snapshots that differ wildly even
-    //  during silence, making onset ratio checks fire constantly.
-    //  With smoothing=0.75, the data follows the actual envelope.
-    //
-    //  Spectral flux: each frame we compute the POSITIVE difference
-    //  between current and previous smoothed energy.
-    //  flux = max(0, currentEnergy - prevEnergy)
-    //
-    //  A kick fires when flux exceeds a dynamic threshold:
-    //    flux > FLUX_THRESHOLD  (absolute floor)
-    //    AND cooldown elapsed
-    //
-    //  No onset-ratio division — just the raw positive delta.
-    //  Simple, robust, works on any genre.
-    //
+    // ─────────────────────────────────────────────────────────
+    //  KICK DETECTOR  (spectral flux, bass bins only)
+    // ─────────────────────────────────────────────────────────
     _runKickDetector() {
-        // Bins 1..3  ≈ 86–344 Hz  (skip bin 0 = DC garbage)
-        const BIN_LO        = 1;
-        const BIN_HI        = 3;
-        // Flux threshold: smoothed energy must RISE by at least this much
-        // Scale: each bin is 0–255, we sum 3 bins → max sum = 765
-        // A typical kick hit raises sum by 200–400; gentle threshold = 60
-        const FLUX_THRESHOLD = 60;
-        const COOLDOWN_MS    = 200;    // ms between allowed kicks
+        const BIN_LO = 1, BIN_HI = 3;
+        const FLUX_THRESHOLD = 60, COOLDOWN_MS = 200;
+        let prevEnergy = 0, lastKick = 0;
 
-        let lastKickTime = 0;
-        let prevEnergy   = 0;
-
-        const detect = () => {
-            requestAnimationFrame(detect);
-            if (!this._analyserKick || !this._kickData) return;
-
-            this._analyserKick.getByteFrequencyData(this._kickData);
-
-            // Sum target bass bins
-            let energy = 0;
-            for (let i = BIN_LO; i <= BIN_HI; i++) energy += this._kickData[i];
-
-            // Positive spectral flux only (rising edge)
-            const flux    = Math.max(0, energy - prevEnergy);
-            prevEnergy    = energy;
-
-            const now     = performance.now();
-            const elapsed = now - lastKickTime;
-
-            if (flux > FLUX_THRESHOLD && elapsed > COOLDOWN_MS) {
-                // KICK — set envelope to 1, decay handled in render loop
-                this._kickEnvelope = 1.0;
-                lastKickTime       = now;
+        const tick = () => {
+            requestAnimationFrame(tick);
+            if (!this._analyser || !this._kickData) return;
+            this._analyser.getByteFrequencyData(this._kickData);
+            let e = 0;
+            for (let i = BIN_LO; i <= BIN_HI; i++) e += this._kickData[i];
+            const flux = Math.max(0, e - prevEnergy);
+            prevEnergy = e;
+            const now = performance.now();
+            if (flux > FLUX_THRESHOLD && now - lastKick > COOLDOWN_MS) {
+                lastKick = now;
+                // Pulse the album art ring
+                const aw = document.getElementById('bbp-art-wrap');
+                if (aw) { aw.classList.remove('kick'); void aw.offsetWidth; aw.classList.add('kick'); }
             }
         };
-        detect();
+        tick();
     }
 
     // ─────────────────────────────────────────────────────────
-    //  AUDIO EVENT HANDLERS
+    //  AUDIO EVENTS
     // ─────────────────────────────────────────────────────────
     _onPlay() {
         this._isPlaying = true;
-        this._q('arp-ico-play') .style.display = 'none';
-        this._q('arp-ico-pause').style.display = 'block';
-        this._q('arp-dot').classList.add('on');
+        this._g('bbp-ico-play') .style.display = 'none';
+        this._g('bbp-ico-pause').style.display = 'block';
         if (this._audioCtx?.state === 'suspended') this._audioCtx.resume();
     }
     _onPause() {
         this._isPlaying = false;
-        this._q('arp-ico-play') .style.display = 'block';
-        this._q('arp-ico-pause').style.display = 'none';
-        this._q('arp-dot').classList.remove('on');
+        this._g('bbp-ico-play') .style.display = 'block';
+        this._g('bbp-ico-pause').style.display = 'none';
     }
-    _onTimeUpdate() {
+    _onTime() {
         if (!this._audio || this._seeking) return;
         const cur = this._audio.currentTime, dur = this._audio.duration;
-        if (isNaN(dur) || dur === 0) return;
+        if (!dur || isNaN(dur)) return;
         const p = cur / dur;
-        this._q('arp-sfill') .style.width = (p * 100) + '%';
-        this._q('arp-sthumb').style.left  = (p * 100) + '%';
-        this._q('arp-cur').textContent    = this._fmt(cur);
+        const fill = this._g('bbp-pfill');
+        const ct   = this._g('bbp-cur');
+        if (fill) fill.style.width   = (p * 100) + '%';
+        if (ct)   ct.textContent     = this._fmt(cur);
     }
     _onMeta() {
         const d = this._audio?.duration;
-        if (d && !isNaN(d)) this._q('arp-tot').textContent = this._fmt(d);
+        const el = this._g('bbp-tot');
+        if (d && !isNaN(d) && el) el.textContent = this._fmt(d);
     }
     _onEnded() {
-        if (this._repeatMode === 'one') {
-            this._audio.currentTime = 0;
-            this._audio.play().catch(() => {});
-        } else {
-            this._autoNext();
-        }
+        if (this._repeatMode === 'one') { this._audio.currentTime = 0; this._audio.play().catch(() => {}); }
+        else this._autoNext();
     }
 
     // ─────────────────────────────────────────────────────────
@@ -877,38 +750,29 @@ audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; 
     // ─────────────────────────────────────────────────────────
     _loadSong(idx, list, autoPlay = true) {
         if (!list?.[idx]) return;
-        this._playlist = list;
-        this._songIdx  = idx;
+        this._playlist = list; this._songIdx = idx;
         const song = list[idx];
-
         this._audio.pause();
         if (song.audioFile) {
             this._audio.src = song.audioFile;
             this._audio.load();
             if (autoPlay) {
                 if (this._audioCtx?.state === 'suspended') this._audioCtx.resume().catch(() => {});
-                this._audio.play().catch(e => console.warn('[ARP] play blocked:', e));
+                this._audio.play().catch(e => console.warn('[BBP] play blocked:', e));
             }
         }
-
         this._renderNowPlaying(song);
-        this._renderLib();
+        this._renderDrawer();
     }
 
     _togglePlay() {
         if (!this._audio) return;
-        if (this._songIdx === -1 && this._allSongs.length) {
-            this._loadSong(0, this._allSongs, true);
-            return;
-        }
+        if (this._songIdx === -1 && this._allSongs.length) { this._loadSong(0, this._allSongs, true); return; }
         if (this._audio.paused) {
             if (this._audioCtx?.state === 'suspended') this._audioCtx.resume();
             this._audio.play().catch(() => {});
-        } else {
-            this._audio.pause();
-        }
+        } else this._audio.pause();
     }
-
     _autoNext() {
         if (!this._playlist?.length) return;
         const idx = this._shuffle
@@ -916,7 +780,6 @@ audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; 
             : (this._songIdx + 1) % this._playlist.length;
         this._loadSong(idx, this._playlist, true);
     }
-
     _next() {
         if (!this._playlist?.length) return;
         const idx = this._shuffle
@@ -924,7 +787,6 @@ audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; 
             : (this._songIdx + 1) % this._playlist.length;
         this._loadSong(idx, this._playlist, this._isPlaying);
     }
-
     _prev() {
         if (!this._playlist?.length) return;
         if (this._audio?.currentTime > 3) { this._audio.currentTime = 0; return; }
@@ -935,187 +797,289 @@ audio-reactive-player *::after { box-sizing: border-box; margin: 0; padding: 0; 
     }
 
     // ─────────────────────────────────────────────────────────
-    //  UI
+    //  UI — NOW PLAYING
     // ─────────────────────────────────────────────────────────
     _renderNowPlaying(song) {
-        const t = this._q('arp-title'), a = this._q('arp-artist'), l = this._q('arp-links');
-        if (t) t.textContent = song.title  || 'Unknown';
-        if (a) a.textContent = song.artist ? song.artist.toUpperCase() : '';
-        if (l) {
-            const sl = song.streamingLinks || {}, lns = [];
-            if (sl.spotify)        lns.push(['Spotify',     sl.spotify]);
-            if (sl.apple)          lns.push(['Apple Music', sl.apple]);
-            if (sl.youtube)        lns.push(['YouTube',     sl.youtube]);
-            if (sl.soundcloud)     lns.push(['SoundCloud',  sl.soundcloud]);
-            if (song.purchaseLink) lns.push(['Buy Now',     song.purchaseLink]);
-            l.innerHTML = lns.map(([n, u]) =>
-                `<a href="${u}" target="_blank" class="arp-link" title="Listen on ${n}">${n}</a>`
-            ).join('');
+        const title  = this._g('bbp-title');
+        const artist = this._g('bbp-artist');
+        const art    = this._g('bbp-art');
+        const ph     = this._g('bbp-art-ph');
+
+        if (title)  title.textContent  = song.title  || 'Unknown';
+        if (artist) artist.textContent = song.artist || '—';
+
+        if (art && ph) {
+            if (song.coverImage) {
+                art.src = song.coverImage; art.style.display = 'block';
+                ph.style.display = 'none';
+            } else {
+                art.style.display = 'none'; ph.style.display = 'flex';
+            }
         }
-        const cur = this._q('arp-cur'), tot = this._q('arp-tot');
-        const fill = this._q('arp-sfill'), thumb = this._q('arp-sthumb');
-        if (cur)   cur.textContent  = '0:00';
-        if (tot)   tot.textContent  = '0:00';
-        if (fill)  fill.style.width = '0%';
-        if (thumb) thumb.style.left = '0%';
+
+        // Reset progress
+        const fill = this._g('bbp-pfill'), cur = this._g('bbp-cur'), tot = this._g('bbp-tot');
+        if (fill) fill.style.width = '0%';
+        if (cur)  cur.textContent  = '0:00';
+        if (tot)  tot.textContent  = '0:00';
+
+        // Build streaming links popup
+        this._buildLinksPop(song);
     }
 
-    _libToggle(open) {
-        const lib = this.querySelector('#arp-lib'), btn = this.querySelector('#arp-lbtn');
-        lib?.classList.toggle('open', open);
-        btn?.classList.toggle('on',   open);
-        if (open) this._renderLib();
+    _buildLinksPop(song) {
+        const pop = this._g('bbp-links-pop');
+        if (!pop) return;
+        const sl = song.streamingLinks || {};
+        const links = [];
+        if (sl.spotify)        links.push(['Spotify',     sl.spotify,    this._svgSpotify()]);
+        if (sl.apple)          links.push(['Apple Music', sl.apple,      this._svgApple()]);
+        if (sl.youtube)        links.push(['YouTube',     sl.youtube,    this._svgYoutube()]);
+        if (sl.soundcloud)     links.push(['SoundCloud',  sl.soundcloud, this._svgSoundcloud()]);
+        if (song.purchaseLink) links.push(['Buy Now',     song.purchaseLink, this._svgBuy()]);
+
+        if (!links.length) { pop.innerHTML = ''; return; }
+
+        pop.innerHTML = links.map(([label, url, icon]) =>
+            `<a href="${this._esc(url)}" target="_blank" rel="noopener">
+                ${icon}<span>${label}</span>
+            </a>`
+        ).join('');
     }
 
-    _renderLib() {
-        const body = this.querySelector('#arp-lbody');
-        const srch = this.querySelector('#arp-srch');
+    // ─────────────────────────────────────────────────────────
+    //  QUEUE DRAWER
+    // ─────────────────────────────────────────────────────────
+    _setDrawer(open) {
+        this._drawerOpen = open;
+        const d = this._g('bbp-drawer');
+        const b = this._g('bbp-qbtn');
+        if (d) d.classList.toggle('open', open);
+        if (b) b.classList.toggle('on',   open);
+        if (open) this._renderDrawer();
+    }
+
+    _renderDrawer() {
+        const body  = this._g('bbp-dbody');
+        const srch  = this._g('bbp-dsrch');
         if (!body) return;
         const q    = srch?.value?.toLowerCase() || '';
         const list = this._allSongs.filter(s =>
-            !q || (s.title ||'').toLowerCase().includes(q) ||
+            !q || (s.title||'').toLowerCase().includes(q) ||
                   (s.artist||'').toLowerCase().includes(q) ||
-                  (s.album ||'').toLowerCase().includes(q)
+                  (s.album||'').toLowerCase().includes(q)
         );
         if (!list.length) {
-            body.innerHTML = `<div class="arp-empty"><svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg><p>No tracks found</p></div>`;
+            body.innerHTML = `<div class="bbp-empty">No tracks found</div>`;
             return;
         }
         body.innerHTML = list.map((song, i) => {
             const active = this._playlist?.indexOf(song) === this._songIdx && this._songIdx !== -1;
-            return `<div class="arp-srow${active ? ' on' : ''}" data-i="${i}">
-                <span class="arp-snum">${active ? '' : i + 1}</span>
-                <div class="arp-bars"><div class="arp-bar"></div><div class="arp-bar"></div><div class="arp-bar"></div></div>
-                <div class="arp-scover">${song.coverImage ? `<img src="${song.coverImage}" alt="" loading="lazy">` : ''}</div>
-                <div class="arp-smeta">
-                    <div class="arp-sname">${this._esc(song.title  || 'Unknown')}</div>
-                    <div class="arp-ssub">${this._esc(song.artist || '—')}${song.album ? ' · ' + this._esc(song.album) : ''}</div>
+            const artHtml = song.coverImage
+                ? `<img src="${this._esc(song.coverImage)}" alt="" loading="lazy">`
+                : `<div class="bbp-sart-ph"><svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>`;
+            return `<div class="bbp-srow${active?' on':''}" data-si="${i}">
+                <span class="bbp-snum">${active ? '' : i + 1}</span>
+                <div class="bbp-bars"><div class="bbp-bar"></div><div class="bbp-bar"></div><div class="bbp-bar"></div></div>
+                <div class="bbp-sart">${artHtml}</div>
+                <div class="bbp-smeta">
+                    <div class="bbp-sname">${this._esc(song.title||'Unknown')}</div>
+                    <div class="bbp-ssub">${this._esc(song.artist||'—')}${song.album?' · '+this._esc(song.album):''}</div>
                 </div>
-                <span class="arp-sdur">${song.duration || ''}</span>
+                <span class="bbp-sdur">${song.duration||''}</span>
             </div>`;
         }).join('');
 
-        body.querySelectorAll('.arp-srow').forEach(row =>
+        body.querySelectorAll('.bbp-srow').forEach(row => {
             row.addEventListener('click', () => {
-                const realSong = list[parseInt(row.dataset.i)];
-                const realIdx  = this._allSongs.indexOf(realSong);
-                this._loadSong(realIdx >= 0 ? realIdx : parseInt(row.dataset.i), this._allSongs, true);
-                this._libToggle(false);
-            })
-        );
+                const real = list[parseInt(row.dataset.si)];
+                const idx  = this._allSongs.indexOf(real);
+                this._loadSong(idx >= 0 ? idx : parseInt(row.dataset.si), this._allSongs, true);
+                this._setDrawer(false);
+            });
+        });
     }
 
     // ─────────────────────────────────────────────────────────
-    //  EVENT BINDING
+    //  EVENTS
     // ─────────────────────────────────────────────────────────
     _bindEvents() {
-        this._q('arp-lbtn') .addEventListener('click', () => this._libToggle(true));
-        this._q('arp-lclose').addEventListener('click', () => this._libToggle(false));
-        this._q('arp-play') .addEventListener('click', () => this._togglePlay());
-        this._q('arp-prev') .addEventListener('click', () => this._prev());
-        this._q('arp-next') .addEventListener('click', () => this._next());
+        // Use a slight delay so DOM is in body before querying
+        setTimeout(() => {
+            const on = (id, ev, fn) => { const el = this._g(id); if (el) el.addEventListener(ev, fn); };
 
-        this._q('arp-shuf').addEventListener('click', () => {
-            this._shuffle = !this._shuffle;
-            this._q('arp-shuf').classList.toggle('on', this._shuffle);
-        });
+            on('bbp-play', 'click', () => this._togglePlay());
+            on('bbp-prev', 'click', () => this._prev());
+            on('bbp-next', 'click', () => this._next());
 
-        this._q('arp-rep').addEventListener('click', () => {
-            const modes = ['none', 'all', 'one'];
-            this._repeatMode = modes[(modes.indexOf(this._repeatMode) + 1) % modes.length];
-            this._q('arp-rep').classList.toggle('on', this._repeatMode !== 'none');
-            this._q('arp-rep').title = `Repeat: ${this._repeatMode}`;
-        });
+            on('bbp-shuf', 'click', () => {
+                this._shuffle = !this._shuffle;
+                this._g('bbp-shuf')?.classList.toggle('on', this._shuffle);
+            });
+            on('bbp-rep', 'click', () => {
+                const modes = ['none','all','one'];
+                this._repeatMode = modes[(modes.indexOf(this._repeatMode)+1) % modes.length];
+                const btn = this._g('bbp-rep');
+                btn?.classList.toggle('on', this._repeatMode !== 'none');
+                btn?.setAttribute('data-tip',
+                    this._repeatMode === 'none' ? 'Repeat' :
+                    this._repeatMode === 'all'  ? 'Repeat: All' : 'Repeat: One');
+                // Swap icon for repeat-one
+                const svg = this._g('bbp-rep-svg');
+                if (svg) svg.innerHTML = this._repeatMode === 'one'
+                    ? '<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2v-1h-1v-1h1V9h-2l-2 1v1h1v1h-1v1h1v1h2z"/>'
+                    : '<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>';
+            });
 
-        const volEl = this._q('arp-vol');
-        volEl.addEventListener('input', e => {
-            this._volume = parseFloat(e.target.value);
-            if (this._gainNode) this._gainNode.gain.value = this._volume;
-            this._syncVolIcon();
-        });
-        this._q('arp-mute').addEventListener('click', () => {
-            if (this._volume > 0) { this._lastVolume = this._volume; this._volume = 0; }
-            else                    this._volume = this._lastVolume || 0.8;
-            volEl.value = this._volume;
-            if (this._gainNode) this._gainNode.gain.value = this._volume;
-            this._syncVolIcon();
-        });
-
-        const scrub = this._q('arp-scrub');
-        const getPct = e => {
-            const r = scrub.getBoundingClientRect();
-            return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-        };
-        scrub.addEventListener('click', e => {
-            if (this._audio?.duration) this._audio.currentTime = getPct(e) * this._audio.duration;
-        });
-        scrub.addEventListener('mousedown', () => {
-            this._seeking = true;
-            const mv = e => { const f = this._q('arp-sfill'); if (f) f.style.width = (getPct(e) * 100) + '%'; };
-            const up = e => {
-                if (this._audio?.duration) this._audio.currentTime = getPct(e) * this._audio.duration;
-                this._seeking = false;
-                document.removeEventListener('mousemove', mv);
-                document.removeEventListener('mouseup',   up);
-            };
-            document.addEventListener('mousemove', mv);
-            document.addEventListener('mouseup',   up);
-        });
-
-        const srch = this.querySelector('#arp-srch');
-        if (srch) srch.addEventListener('input', () => this._renderLib());
-
-        // PlayerAPI command bus
-        this.addEventListener('player-command', e => {
-            const { command, data } = e.detail || {};
-            if      (command === 'play')     this._audio?.play().catch(() => {});
-            else if (command === 'pause')    this._audio?.pause();
-            else if (command === 'next')     this._next();
-            else if (command === 'previous') this._prev();
-            else if (command === 'setVolume') {
-                this._volume = data?.volume ?? this._volume;
+            // Volume
+            on('bbp-vol', 'input', e => {
+                this._volume = parseFloat(e.target.value);
                 if (this._gainNode) this._gainNode.gain.value = this._volume;
-                const vEl = this._q('arp-vol');
-                if (vEl) vEl.value = this._volume;
-            } else if (command === 'seekTo') {
-                if (this._audio?.duration && data?.position != null)
-                    this._audio.currentTime = data.position * this._audio.duration;
-            } else if (command === 'shuffle') {
-                this._shuffle = data?.enable ?? !this._shuffle;
-            } else if (command === 'repeat') {
-                this._repeatMode = data?.enable ? 'all' : 'none';
+                this._syncVolIcon();
+            });
+            on('bbp-mute', 'click', () => {
+                if (this._volume > 0) { this._lastVolume = this._volume; this._volume = 0; }
+                else                    this._volume = this._lastVolume || 0.8;
+                const sl = this._g('bbp-vol');
+                if (sl) sl.value = this._volume;
+                if (this._gainNode) this._gainNode.gain.value = this._volume;
+                this._syncVolIcon();
+            });
+
+            // Progress bar scrub
+            const prog = this._g('bbp-prog');
+            if (prog) {
+                const getPct = e => {
+                    const r = prog.getBoundingClientRect();
+                    return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+                };
+                prog.addEventListener('click', e => {
+                    if (this._audio?.duration) this._audio.currentTime = getPct(e) * this._audio.duration;
+                });
+                prog.addEventListener('mousedown', () => {
+                    this._seeking = true;
+                    const mv = e => {
+                        const f = this._g('bbp-pfill');
+                        if (f) f.style.width = (getPct(e) * 100) + '%';
+                    };
+                    const up = e => {
+                        if (this._audio?.duration) this._audio.currentTime = getPct(e) * this._audio.duration;
+                        this._seeking = false;
+                        document.removeEventListener('mousemove', mv);
+                        document.removeEventListener('mouseup',   up);
+                    };
+                    document.addEventListener('mousemove', mv);
+                    document.addEventListener('mouseup',   up);
+                });
             }
-        });
+
+            // Queue drawer
+            on('bbp-qbtn',  'click', () => this._setDrawer(!this._drawerOpen));
+            on('bbp-dclose','click', () => this._setDrawer(false));
+            on('bbp-dsrch', 'input', () => this._renderDrawer());
+
+            // Album art click → toggle links popup
+            on('bbp-art-wrap', 'click', () => {
+                this._linksOpen = !this._linksOpen;
+                this._g('bbp-links-pop')?.classList.toggle('open', this._linksOpen);
+            });
+            on('bbp-title', 'click', () => {
+                this._linksOpen = !this._linksOpen;
+                this._g('bbp-links-pop')?.classList.toggle('open', this._linksOpen);
+            });
+
+            // Like toggle (cosmetic)
+            on('bbp-like', 'click', () => this._g('bbp-like')?.classList.toggle('on'));
+
+            // Close popups when clicking outside
+            this._docClickHandler = e => {
+                // Close links pop
+                const lp = this._g('bbp-links-pop');
+                const aw = this._g('bbp-art-wrap');
+                const tl = this._g('bbp-title');
+                if (lp && this._linksOpen && !lp.contains(e.target) && !aw?.contains(e.target) && !tl?.contains(e.target)) {
+                    this._linksOpen = false;
+                    lp.classList.remove('open');
+                }
+                // Close drawer
+                const dr = this._g('bbp-drawer');
+                const qb = this._g('bbp-qbtn');
+                if (dr && this._drawerOpen && !dr.contains(e.target) && !qb?.contains(e.target)) {
+                    this._setDrawer(false);
+                }
+            };
+            document.addEventListener('click', this._docClickHandler);
+
+            // PlayerAPI command bus (same interface as all previous widgets)
+            this.addEventListener('player-command', e => {
+                const { command, data } = e.detail || {};
+                if      (command === 'play')     this._audio?.play().catch(() => {});
+                else if (command === 'pause')    this._audio?.pause();
+                else if (command === 'next')     this._next();
+                else if (command === 'previous') this._prev();
+                else if (command === 'setVolume') {
+                    this._volume = data?.volume ?? this._volume;
+                    if (this._gainNode) this._gainNode.gain.value = this._volume;
+                    const sl = this._g('bbp-vol'); if (sl) sl.value = this._volume;
+                } else if (command === 'seekTo') {
+                    if (this._audio?.duration && data?.position != null)
+                        this._audio.currentTime = data.position * this._audio.duration;
+                } else if (command === 'shuffle') {
+                    this._shuffle = data?.enable ?? !this._shuffle;
+                } else if (command === 'repeat') {
+                    this._repeatMode = data?.enable ? 'all' : 'none';
+                }
+            });
+        }, 0);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  THEMING
+    // ─────────────────────────────────────────────────────────
+    _applyThemeProp(name, val) {
+        const map = {
+            'primary-color':    '--bbp-acc',
+            'background-color': '--bbp-bg',
+            'surface-color':    '--bbp-surf',
+            'text-primary':     '--bbp-t1',
+            'text-secondary':   '--bbp-t2',
+        };
+        const cssVar = map[name];
+        if (cssVar) {
+            document.documentElement.style.setProperty(cssVar, val);
+            if (name === 'primary-color') {
+                this._colAcc = val;
+                document.documentElement.style.setProperty('--bbp-kick', this._hexToRgbStr(val) || '29,185,84');
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────
     //  HELPERS
     // ─────────────────────────────────────────────────────────
-    _loadScripts(srcs) {
-        return srcs.reduce((p, src) => p.then(() => new Promise(resolve => {
-            if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-            const s = document.createElement('script');
-            s.src = src; s.onload = resolve; s.onerror = resolve;
-            document.head.appendChild(s);
-        })), Promise.resolve());
-    }
-
-    _q(id)   { return this.querySelector('#' + id); }
+    _g(id)   { return document.getElementById(id); }
     _fmt(s)  {
         if (!s || isNaN(s)) return '0:00';
         const m = Math.floor(s / 60), sec = Math.floor(s % 60);
         return `${m}:${sec < 10 ? '0' : ''}${sec}`;
     }
     _esc(t)  { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
-    _hex01(hex) {
+    _hexToRgbStr(hex) {
         const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return m ? { r: parseInt(m[1],16)/255, g: parseInt(m[2],16)/255, b: parseInt(m[3],16)/255 } : null;
+        return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : null;
     }
     _syncVolIcon() {
-        const vi = this._q('arp-ico-vol'), mi = this._q('arp-ico-mut');
+        const vi = this._g('bbp-vol-ico'), mi = this._g('bbp-mut-ico');
         if (vi) vi.style.display = this._volume === 0 ? 'none'  : 'block';
         if (mi) mi.style.display = this._volume === 0 ? 'block' : 'none';
     }
+
+    // ── Streaming service icons ──
+    _svgSpotify()    { return `<svg viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>`; }
+    _svgApple()      { return `<svg viewBox="0 0 24 24"><path d="M23.994 14.583c-.418 1.698-1.502 3.608-2.844 5.19-1.296 1.524-2.63 2.226-4.005 2.226-.968 0-2.228-.588-3.168-1.108-.978-.54-2.178-1.068-3.497-1.068-1.368 0-2.568.528-3.588 1.068-.972.516-2.136 1.108-3.132 1.108-1.452 0-2.916-.936-4.404-2.856C1.68 18.07.918 16.35.504 14.43.102 12.498 0 10.62 0 9.174c0-2.826.744-5.118 2.208-6.864C3.576.888 5.37 0 7.278 0c1.092 0 2.37.564 3.372 1.068.948.48 1.908.924 2.814.924.792 0 1.74-.444 2.76-.924C17.25.498 18.474 0 19.638 0c1.722 0 3.408.714 4.836 2.07-1.644.996-2.502 2.508-2.502 4.464 0 1.788.798 3.312 2.022 4.374zm-8.148-13.53c.054.234.078.462.078.696 0 1.506-.648 2.94-1.692 3.924-.972.936-2.262 1.482-3.492 1.344a4.992 4.992 0 01-.06-.648c0-1.404.618-2.844 1.638-3.81 1.002-.954 2.322-1.542 3.528-1.506z"/></svg>`; }
+    _svgYoutube()    { return `<svg viewBox="0 0 24 24"><path d="M23.495 6.205a3.007 3.007 0 00-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 00.527 6.205a31.247 31.247 0 00-.522 5.805 31.247 31.247 0 00.522 5.783 3.007 3.007 0 002.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 002.088-2.088 31.247 31.247 0 00.5-5.783 31.247 31.247 0 00-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>`; }
+    _svgSoundcloud() { return `<svg viewBox="0 0 24 24"><path d="M0 14.232a2.985 2.985 0 002.978 2.986l.006.004h14.037a2.987 2.987 0 002.978-2.99 2.987 2.987 0 00-2.978-2.99 2.945 2.945 0 00-.638.07A4.98 4.98 0 0012 6.522a5.005 5.005 0 00-4.998 5.008.78.78 0 000 .117A2.983 2.983 0 000 14.232zm20.97-.63a3.03 3.03 0 10-3.03 3.63h3.03a3.03 3.03 0 000-6.06v2.43z"/></svg>`; }
+    _svgBuy()        { return `<svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96C5 16.1 6.9 18 9 18h12v-2H9.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63H19c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0023.46 5H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>`; }
 }
 
-customElements.define('audio-reactive-player', AudioReactivePlayer);
+customElements.define('bottom-bar-player', BottomBarPlayer);
