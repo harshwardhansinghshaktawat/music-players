@@ -38,6 +38,7 @@ class AdvancedMusicPlayerPro extends HTMLElement {
         this._domReady        = false;
         this._audioReady      = false;
         this._pendingLoad     = null;
+        this._playerName      = null;  // FIX: Store player name
 
         this._EQ_FREQS  = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
         this._EQ_LABELS = ['32','64','125','250','500','1k','2k','4k','8k','16k'];
@@ -83,10 +84,13 @@ class AdvancedMusicPlayerPro extends HTMLElement {
                 }
             } catch(e) { console.error('[AMP] player-data error', e); }
         } 
-        // FIX 1: Player name update now works properly
+        // FIX: Store player name, update after DOM ready
         else if (name === 'player-name' && newVal) {
-            const el = this.querySelector('.amp-brand');
-            if (el) el.textContent = newVal;
+            this._playerName = newVal;
+            if (this._domReady) {
+                const el = this.querySelector('.amp-brand');
+                if (el) el.textContent = newVal;
+            }
         } 
         else if (name === 'title-font-family' && newVal) {
             this.style.setProperty('--title-font', newVal);
@@ -108,6 +112,12 @@ class AdvancedMusicPlayerPro extends HTMLElement {
         this._buildEQBands();
         this._idleStart();
         this._domReady = true;
+
+        // FIX: Apply player name after DOM is ready
+        if (this._playerName) {
+            const el = this.querySelector('.amp-brand');
+            if (el) el.textContent = this._playerName;
+        }
 
         if (this._playerData) {
             this._renderLib();
@@ -1284,7 +1294,7 @@ input.amp-eq-sl::-moz-range-thumb {
         );
     }
 
-    // Visualizer
+    // Visualizer - FIX: WCAG compliant contrast
     _visStart() {
         const cv = this._q('amp-vis');
         if (!cv || !this._analyser) return;
@@ -1300,12 +1310,10 @@ input.amp-eq-sl::-moz-range-thumb {
             const acc = this._accentColor();
             for (let i = 0; i < N; i++) {
                 const v = this._dataArray[Math.floor(i * this._dataArray.length / N)] / 255;
-                const barH = Math.max(2, v * cv.height);
-                const grad = ctx.createLinearGradient(0, cv.height - barH, 0, cv.height);
-                grad.addColorStop(0, acc);
-                grad.addColorStop(1, 'rgba(59,130,246,0.2)');
-                ctx.fillStyle   = grad;
-                ctx.globalAlpha = 0.5 + v * 0.5;
+                const barH = Math.max(3, v * cv.height);
+                // WCAG Fix: Solid color bars with higher opacity for better contrast
+                ctx.fillStyle = acc;
+                ctx.globalAlpha = 0.85 + v * 0.15; // Much more opaque (85-100%)
                 ctx.fillRect(i * bw + 1, cv.height - barH, bw - 2, barH);
             }
             ctx.globalAlpha = 1;
@@ -1332,8 +1340,8 @@ input.amp-eq-sl::-moz-range-thumb {
                 h[i] = Math.max(0.02, Math.min(0.12, h[i] + sp[i]));
                 if (h[i] >= 0.12 || h[i] <= 0.02) sp[i] *= -1;
                 const barH = h[i] * cv.height;
-                ctx.fillStyle   = acc;
-                ctx.globalAlpha = 0.15;
+                ctx.fillStyle = acc;
+                ctx.globalAlpha = 0.4; // More visible idle state
                 ctx.fillRect(i * bw + 1, cv.height - barH, bw - 2, barH);
             }
             ctx.globalAlpha = 1;
