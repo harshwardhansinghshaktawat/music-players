@@ -61,7 +61,7 @@ class AdvancedMusicPlayerPro extends HTMLElement {
             'player-data','player-name',
             'primary-color','secondary-color','background-color',
             'surface-color','text-primary','text-secondary','accent-color',
-            'title-font-family','body-font-family'
+            'title-font-family','text-font-family'
         ];
     }
 
@@ -91,7 +91,7 @@ class AdvancedMusicPlayerPro extends HTMLElement {
         else if (name === 'title-font-family' && newVal) {
             this.style.setProperty('--title-font', newVal);
         }
-        else if (name === 'body-font-family' && newVal) {
+        else if (name === 'text-font-family' && newVal) {
             this.style.setProperty('--body-font', newVal);
         }
         else if (name.includes('color')) {
@@ -229,13 +229,22 @@ advanced-music-player-pro *::after {
     position:relative; height:128px; flex-shrink:0;
     overflow:hidden; background:var(--surf);
 }
-/* FIX 2: Background blur now behind visualizer and connected to primary color */
+/* FIX 2: Background blur behind visualizer - connected to primary/accent color */
 .amp-art-bg {
     position:absolute; inset:0;
     background-size:cover; background-position:center;
-    filter:blur(20px) brightness(.3); 
+    /* Blur uses primary color tint overlay */
+    filter:blur(20px) brightness(.3);
     transform:scale(1.1);
     z-index:0;
+}
+.amp-art-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--acc);
+    opacity: 0.15;
+    mix-blend-mode: overlay;
 }
 .amp-art-row {
     position:relative; z-index:1;
@@ -1210,17 +1219,20 @@ input.amp-eq-sl::-moz-range-thumb {
         this._q('amp-eqbadge').textContent = preset.name.toUpperCase();
         this._status('EQ: ' + preset.name);
 
-        this._buildEQBands();
-        this._buildCustomSliders();
-
+        // FIX: Properly show/hide EQ display modes
         const bars   = this._q('amp-eqbars');
         const custom = this._q('amp-eqcustom');
+        
         if (key === 'custom') {
-            bars.style.display   = 'none';
-            custom.classList.add('show');
+            // Hide preset bars, show custom sliders
+            if (bars) bars.style.display = 'none';
+            if (custom) custom.classList.add('show');
+            this._buildCustomSliders();
         } else {
-            bars.style.display   = '';
-            custom.classList.remove('show');
+            // Show preset bars, hide custom sliders
+            if (bars) bars.style.display = 'flex';
+            if (custom) custom.classList.remove('show');
+            this._buildEQBands();
         }
     }
 
