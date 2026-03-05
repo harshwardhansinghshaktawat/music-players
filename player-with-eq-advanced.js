@@ -61,7 +61,7 @@ class AdvancedMusicPlayerPro extends HTMLElement {
             'player-data','player-name',
             'primary-color','secondary-color','background-color',
             'surface-color','text-primary','text-secondary','accent-color',
-            'title-font-family','text-font-family'
+            'title-font-family','body-font-family'
         ];
     }
 
@@ -91,7 +91,7 @@ class AdvancedMusicPlayerPro extends HTMLElement {
         else if (name === 'title-font-family' && newVal) {
             this.style.setProperty('--title-font', newVal);
         }
-        else if (name === 'text-font-family' && newVal) {
+        else if (name === 'body-font-family' && newVal) {
             this.style.setProperty('--body-font', newVal);
         }
         else if (name.includes('color')) {
@@ -229,10 +229,13 @@ advanced-music-player-pro *::after {
     position:relative; height:128px; flex-shrink:0;
     overflow:hidden; background:var(--surf);
 }
+/* FIX 2: Background blur now behind visualizer and connected to primary color */
 .amp-art-bg {
     position:absolute; inset:0;
     background-size:cover; background-position:center;
-    filter:blur(20px) brightness(.3); transform:scale(1.1);
+    filter:blur(20px) brightness(.3); 
+    transform:scale(1.1);
+    z-index:0;
 }
 .amp-art-row {
     position:relative; z-index:1;
@@ -246,6 +249,7 @@ advanced-music-player-pro *::after {
     background:var(--panel);
     box-shadow:0 4px 20px rgba(0,0,0,.6);
     position:relative;
+    z-index:2;
 }
 .amp-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .amp-thumb-ph {
@@ -255,7 +259,7 @@ advanced-music-player-pro *::after {
 }
 .amp-thumb-ph svg { width:28px; height:28px; fill:var(--t3); opacity:.45; }
 
-.amp-meta { flex:1; min-width:0; }
+.amp-meta { flex:1; min-width:0; z-index:2; }
 .amp-title {
     font-size:18px; font-weight:700; line-height:1.1;
     color:var(--t1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -281,28 +285,27 @@ advanced-music-player-pro *::after {
 }
 .amp-link:hover { background:rgba(59,130,246,.22); border-color:var(--acc); }
 
+/* FIX 4: Visualizer made wider (90px → 140px) */
+/* FIX 2: Visualizer z-index above background blur */
 .amp-vis-wrap {
     flex-shrink: 0;
-    width: 90px;
+    width: 140px;
     height: 80px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 4px;
+    z-index:2;
 }
 .amp-vis {
-    width: 90px;
-    height: 68px;
+    width: 140px;
+    height: 80px;
     display: block;
 }
+/* FIX 3: VIS label removed */
 .amp-vis-lbl {
-    font-size: 8px;
-    font-family: var(--mono);
-    color: var(--t3);
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    text-align: center;
+    display: none;
 }
 
 /* PROGRESS */
@@ -709,9 +712,9 @@ input.amp-eq-sl::-moz-range-thumb {
             <div class="amp-album-lbl" id="amp-albl"></div>
             <div class="amp-links"  id="amp-links"></div>
         </div>
+        <!-- FIX 2, 3, 4: Visualizer wider (140px), no label, background blur behind it -->
         <div class="amp-vis-wrap">
             <canvas class="amp-vis" id="amp-vis"></canvas>
-            <div class="amp-vis-lbl" id="amp-vis-lbl">VIS</div>
         </div>
     </div>
 </div>
@@ -1273,10 +1276,10 @@ input.amp-eq-sl::-moz-range-thumb {
     _visStart() {
         const cv = this._q('amp-vis');
         if (!cv || !this._analyser) return;
-        cv.width  = cv.offsetWidth  || 90;
-        cv.height = cv.offsetHeight || 68;
+        cv.width  = cv.offsetWidth  || 140;
+        cv.height = cv.offsetHeight || 80;
         const ctx = cv.getContext('2d');
-        const N   = 24, bw = cv.width / N;
+        const N   = 32, bw = cv.width / N;
         const draw = () => {
             if (!this._isPlaying) return;
             this._animId = requestAnimationFrame(draw);
@@ -1296,17 +1299,15 @@ input.amp-eq-sl::-moz-range-thumb {
             ctx.globalAlpha = 1;
         };
         draw();
-        const lbl = this._q('amp-vis-lbl');
-        if (lbl) lbl.textContent = 'LIVE';
     }
 
     _idleStart() {
         const cv = this._q('amp-vis');
         if (!cv) return;
-        cv.width  = cv.offsetWidth  || 90;
-        cv.height = cv.offsetHeight || 68;
+        cv.width  = cv.offsetWidth  || 140;
+        cv.height = cv.offsetHeight || 80;
         const ctx = cv.getContext('2d');
-        const N   = 24, bw = cv.width / N;
+        const N   = 32, bw = cv.width / N;
         const h   = Array.from({length:N}, () => Math.random() * 0.1);
         const sp  = Array.from({length:N}, () => (Math.random()-.5) * 0.005);
         const acc = this._accentColor();
@@ -1326,8 +1327,6 @@ input.amp-eq-sl::-moz-range-thumb {
             ctx.globalAlpha = 1;
         };
         draw();
-        const lbl = this._q('amp-vis-lbl');
-        if (lbl) lbl.textContent = 'VIS';
     }
 
     _visStop() {
