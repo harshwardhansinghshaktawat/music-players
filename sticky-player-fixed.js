@@ -71,8 +71,6 @@ class StickyMusicPlayer extends HTMLElement {
         this._buildDOM();
         this._initAudio();
         this._bindEvents();
-        this._applyStyles();
-        this._applyShadow();
     }
 
     disconnectedCallback() {
@@ -93,8 +91,10 @@ class StickyMusicPlayer extends HTMLElement {
 sticky-music-player {
     display: block;
     width: 100%;
-    font-family: var(--font-family, 'Inter', sans-serif);
-    
+    font-family: 'Inter', sans-serif;
+}
+
+#sticky-player-fixed {
     /* Default WCAG compliant colors */
     --primary: #3b82f6;
     --secondary: #60a5fa;
@@ -104,6 +104,7 @@ sticky-music-player {
     --accent: #3b82f6;
     --shadow-color: #000000;
     --shadow-intensity: 0.3;
+    --font-family: 'Inter', sans-serif;
 }
 
 *, *::before, *::after {
@@ -112,7 +113,7 @@ sticky-music-player {
     padding: 0;
 }
 
-.sticky-player {
+#sticky-player-fixed {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -125,10 +126,11 @@ sticky-music-player {
     gap: 20px;
     z-index: 9999;
     box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+    font-family: var(--font-family);
 }
 
 /* FIX: Added shadow with controllable color and intensity */
-.sticky-player::before {
+#sticky-player-fixed::before {
     content: '';
     position: absolute;
     top: -20px;
@@ -439,7 +441,6 @@ sticky-music-player {
         
         const player = document.createElement('div');
         player.id = 'sticky-player-fixed';
-        player.className = 'sticky-player';
         player.innerHTML = `
             <div class="album-art" id="albumArt">
                 <div class="album-placeholder">
@@ -509,6 +510,12 @@ sticky-music-player {
         
         // Add padding to body so content doesn't go under the player
         document.body.style.paddingBottom = '90px';
+        
+        // Apply styles after DOM is ready
+        setTimeout(() => {
+            this._applyStyles();
+            this._applyShadow();
+        }, 50);
     }
 
     _initAudio() {
@@ -523,30 +530,35 @@ sticky-music-player {
     }
 
     _bindEvents() {
-        const playBtn = this.querySelector('#playBtn');
-        const prevBtn = this.querySelector('#prevBtn');
-        const nextBtn = this.querySelector('#nextBtn');
-        const shuffleBtn = this.querySelector('#shuffleBtn');
-        const repeatBtn = this.querySelector('#repeatBtn');
-        const volumeBtn = this.querySelector('#volumeBtn');
-        const volumeSlider = this.querySelector('#volumeSlider');
-        const progressBar = this.querySelector('#progressBar');
+        // Use setTimeout to ensure DOM is ready in body
+        setTimeout(() => {
+            const playBtn = document.querySelector('#playBtn');
+            const prevBtn = document.querySelector('#prevBtn');
+            const nextBtn = document.querySelector('#nextBtn');
+            const shuffleBtn = document.querySelector('#shuffleBtn');
+            const repeatBtn = document.querySelector('#repeatBtn');
+            const volumeBtn = document.querySelector('#volumeBtn');
+            const volumeSlider = document.querySelector('#volumeSlider');
+            const progressBar = document.querySelector('#progressBar');
 
-        playBtn.addEventListener('click', () => this._togglePlay());
-        prevBtn.addEventListener('click', () => this._prev());
-        nextBtn.addEventListener('click', () => this._next());
-        shuffleBtn.addEventListener('click', () => this._toggleShuffle());
-        repeatBtn.addEventListener('click', () => this._toggleRepeat());
-        volumeBtn.addEventListener('click', () => this._toggleMute());
-        volumeSlider.addEventListener('input', (e) => this._setVolume(e.target.value));
+            if (!playBtn) return;
 
-        progressBar.addEventListener('click', (e) => {
-            const rect = progressBar.getBoundingClientRect();
-            const percent = (e.clientX - rect.left) / rect.width;
-            if (this._audio.duration) {
-                this._audio.currentTime = percent * this._audio.duration;
-            }
-        });
+            playBtn.addEventListener('click', () => this._togglePlay());
+            prevBtn.addEventListener('click', () => this._prev());
+            nextBtn.addEventListener('click', () => this._next());
+            shuffleBtn.addEventListener('click', () => this._toggleShuffle());
+            repeatBtn.addEventListener('click', () => this._toggleRepeat());
+            volumeBtn.addEventListener('click', () => this._toggleMute());
+            volumeSlider.addEventListener('input', (e) => this._setVolume(e.target.value));
+
+            progressBar.addEventListener('click', (e) => {
+                const rect = progressBar.getBoundingClientRect();
+                const percent = (e.clientX - rect.left) / rect.width;
+                if (this._audio.duration) {
+                    this._audio.currentTime = percent * this._audio.duration;
+                }
+            });
+        }, 100);
     }
 
     _loadSong(index, autoPlay = false) {
@@ -567,9 +579,11 @@ sticky-music-player {
     }
 
     _updateUI(song) {
-        const title = this.querySelector('#songTitle');
-        const artist = this.querySelector('#songArtist');
-        const albumArt = this.querySelector('#albumArt');
+        const title = document.querySelector('#songTitle');
+        const artist = document.querySelector('#songArtist');
+        const albumArt = document.querySelector('#albumArt');
+
+        if (!title) return;
 
         title.textContent = song.title || 'Unknown Title';
         artist.textContent = song.artist || 'Unknown Artist';
@@ -613,9 +627,11 @@ sticky-music-player {
 
     _toggleShuffle() {
         this._shuffle = !this._shuffle;
-        const btn = this.querySelector('#shuffleBtn');
-        btn.classList.toggle('active', this._shuffle);
-        btn.title = this._shuffle ? 'Shuffle On' : 'Shuffle Off';
+        const btn = document.querySelector('#shuffleBtn');
+        if (btn) {
+            btn.classList.toggle('active', this._shuffle);
+            btn.title = this._shuffle ? 'Shuffle On' : 'Shuffle Off';
+        }
     }
 
     _toggleRepeat() {
@@ -623,7 +639,9 @@ sticky-music-player {
         const current = modes.indexOf(this._repeat);
         this._repeat = modes[(current + 1) % modes.length];
         
-        const btn = this.querySelector('#repeatBtn');
+        const btn = document.querySelector('#repeatBtn');
+        if (!btn) return;
+        
         btn.classList.toggle('active', this._repeat !== 'none');
         
         const titles = { none: 'Repeat Off', all: 'Repeat All', one: 'Repeat One' };
@@ -645,7 +663,8 @@ sticky-music-player {
         }
         
         if (this._audio) this._audio.volume = this._volume;
-        this.querySelector('#volumeSlider').value = this._volume;
+        const slider = document.querySelector('#volumeSlider');
+        if (slider) slider.value = this._volume;
         this._updateVolumeIcon();
     }
 
@@ -656,8 +675,10 @@ sticky-music-player {
     }
 
     _updateVolumeIcon() {
-        const volumeIcon = this.querySelector('#volumeIcon');
-        const muteIcon = this.querySelector('#muteIcon');
+        const volumeIcon = document.querySelector('#volumeIcon');
+        const muteIcon = document.querySelector('#muteIcon');
+        
+        if (!volumeIcon || !muteIcon) return;
         
         if (this._volume === 0) {
             volumeIcon.style.display = 'none';
@@ -677,14 +698,18 @@ sticky-music-player {
         if (isNaN(duration)) return;
         
         const percent = (current / duration) * 100;
-        this.querySelector('#progressFill').style.width = percent + '%';
-        this.querySelector('#currentTime').textContent = this._formatTime(current);
+        const fill = document.querySelector('#progressFill');
+        const timeEl = document.querySelector('#currentTime');
+        
+        if (fill) fill.style.width = percent + '%';
+        if (timeEl) timeEl.textContent = this._formatTime(current);
     }
 
     _onMetadata() {
         const duration = this._audio.duration;
         if (duration && !isNaN(duration)) {
-            this.querySelector('#totalTime').textContent = this._formatTime(duration);
+            const timeEl = document.querySelector('#totalTime');
+            if (timeEl) timeEl.textContent = this._formatTime(duration);
         }
     }
 
@@ -699,25 +724,31 @@ sticky-music-player {
 
     _onPlay() {
         this._isPlaying = true;
-        this.querySelector('#playIcon').style.display = 'none';
-        this.querySelector('#pauseIcon').style.display = 'block';
+        const playIcon = document.querySelector('#playIcon');
+        const pauseIcon = document.querySelector('#pauseIcon');
+        
+        if (playIcon) playIcon.style.display = 'none';
+        if (pauseIcon) pauseIcon.style.display = 'block';
         this._startVisualizer();
     }
 
     _onPause() {
         this._isPlaying = false;
-        this.querySelector('#playIcon').style.display = 'block';
-        this.querySelector('#pauseIcon').style.display = 'none';
+        const playIcon = document.querySelector('#playIcon');
+        const pauseIcon = document.querySelector('#pauseIcon');
+        
+        if (playIcon) playIcon.style.display = 'block';
+        if (pauseIcon) pauseIcon.style.display = 'none';
         this._stopVisualizer();
     }
 
     _startVisualizer() {
-        const bars = this.querySelectorAll('.vis-bar');
+        const bars = document.querySelectorAll('.vis-bar');
         bars.forEach(bar => bar.classList.add('active'));
     }
 
     _stopVisualizer() {
-        const bars = this.querySelectorAll('.vis-bar');
+        const bars = document.querySelectorAll('.vis-bar');
         bars.forEach(bar => bar.classList.remove('active'));
     }
 
@@ -737,21 +768,29 @@ sticky-music-player {
         const accent = this.getAttribute('accent-color') || '#3b82f6';
         const fontFamily = this.getAttribute('font-family') || 'Inter';
 
-        this.style.setProperty('--primary', primary);
-        this.style.setProperty('--secondary', secondary);
-        this.style.setProperty('--bg', bg);
-        this.style.setProperty('--text-primary', textPrimary);
-        this.style.setProperty('--text-secondary', textSecondary);
-        this.style.setProperty('--accent', accent);
-        this.style.setProperty('--font-family', fontFamily);
+        // Apply to the fixed player in body
+        const player = document.getElementById('sticky-player-fixed');
+        if (player) {
+            player.style.setProperty('--primary', primary);
+            player.style.setProperty('--secondary', secondary);
+            player.style.setProperty('--bg', bg);
+            player.style.setProperty('--text-primary', textPrimary);
+            player.style.setProperty('--text-secondary', textSecondary);
+            player.style.setProperty('--accent', accent);
+            player.style.setProperty('--font-family', fontFamily);
+        }
     }
 
     _applyShadow() {
         const shadowColor = this.getAttribute('shadow-color') || '#000000';
         const shadowIntensity = parseFloat(this.getAttribute('shadow-intensity') || '30') / 100;
 
-        this.style.setProperty('--shadow-color', shadowColor);
-        this.style.setProperty('--shadow-intensity', shadowIntensity);
+        // Apply to the fixed player in body
+        const player = document.getElementById('sticky-player-fixed');
+        if (player) {
+            player.style.setProperty('--shadow-color', shadowColor);
+            player.style.setProperty('--shadow-intensity', shadowIntensity);
+        }
     }
 }
 
