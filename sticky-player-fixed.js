@@ -20,9 +20,13 @@ class StickyMusicPlayer extends HTMLElement {
         this._currentSong = 0;
         this._songs = [];
         this._volume = 0.8;
+        this._lastVolume = 0.8;
         this._shuffle = false;
         this._repeat = 'none';
         this._seeking = false;
+        this._drawerOpen = false;
+        this._searchQuery = '';
+        this._domReady = false;
     }
 
     static get observedAttributes() {
@@ -47,8 +51,11 @@ class StickyMusicPlayer extends HTMLElement {
             try {
                 const data = JSON.parse(newVal);
                 this._songs = data.songs || [];
-                if (this._songs.length && !this._audio) {
-                    this._loadSong(0, false);
+                if (this._songs.length > 0) {
+                    if (this._domReady) {
+                        this._loadSong(0, false);
+                        this._renderDrawer();
+                    }
                 }
             } catch (e) {
                 console.error('[StickyPlayer] Data error:', e);
@@ -71,6 +78,13 @@ class StickyMusicPlayer extends HTMLElement {
         this._buildDOM();
         this._initAudio();
         this._bindEvents();
+        this._domReady = true;
+        
+        // Load first song if songs already loaded
+        if (this._songs.length > 0) {
+            this._loadSong(0, false);
+            this._renderDrawer();
+        }
     }
 
     disconnectedCallback() {
@@ -79,6 +93,9 @@ class StickyMusicPlayer extends HTMLElement {
         // Remove the fixed player from body
         const player = document.getElementById('sticky-player-fixed');
         if (player) player.remove();
+        // Remove the drawer
+        const drawer = document.getElementById('sticky-queue-drawer');
+        if (drawer) drawer.remove();
         // Remove body padding
         document.body.style.paddingBottom = '';
     }
@@ -357,44 +374,195 @@ sticky-music-player {
     cursor: pointer;
 }
 
-/* Visualizer */
-.visualizer {
-    width: 60px;
+/* Queue Button */
+.queue-btn {
+    width: 40px;
     height: 40px;
+}
+
+.queue-btn.active {
+    color: var(--accent);
+}
+
+/* Queue Drawer */
+#sticky-queue-drawer {
+    position: fixed;
+    bottom: 90px;
+    right: 16px;
+    width: 360px;
+    max-height: 500px;
+    background: var(--bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     display: flex;
-    align-items: flex-end;
-    gap: 2px;
+    flex-direction: column;
+    z-index: 10000;
+    transform: translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s, opacity 0.3s;
+    font-family: var(--font-family);
+}
+
+#sticky-queue-drawer.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: all;
+}
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drawer-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.drawer-close {
+    width: 32px;
+    height: 32px;
+}
+
+.drawer-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drawer-search svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--text-secondary);
     flex-shrink: 0;
 }
 
-.vis-bar {
+.search-input {
     flex: 1;
-    background: var(--accent);
-    border-radius: 2px 2px 0 0;
-    height: 4px;
-    opacity: 0.6;
-    transition: height 0.1s ease;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--font-family);
 }
 
-.vis-bar.active {
-    opacity: 1;
-    animation: pulse 1.2s ease-in-out infinite;
+.search-input::placeholder {
+    color: var(--text-secondary);
 }
 
-.vis-bar:nth-child(1) { animation-delay: 0s; }
-.vis-bar:nth-child(2) { animation-delay: 0.1s; }
-.vis-bar:nth-child(3) { animation-delay: 0.2s; }
-.vis-bar:nth-child(4) { animation-delay: 0.3s; }
-.vis-bar:nth-child(5) { animation-delay: 0.4s; }
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
 
-@keyframes pulse {
-    0%, 100% { height: 4px; }
-    50% { height: 32px; }
+.drawer-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.drawer-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+/* Song Rows in Drawer */
+.queue-song {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.queue-song:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.queue-song.active {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.queue-num {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.queue-song.active .queue-num {
+    color: var(--accent);
+}
+
+.queue-art {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
+    flex-shrink: 0;
+}
+
+.queue-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.queue-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-song-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-song.active .queue-song-title {
+    color: var(--accent);
+}
+
+.queue-song-artist {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-duration {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.queue-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .sticky-player {
+    #sticky-player-fixed {
         padding: 12px 16px;
         gap: 12px;
     }
@@ -427,8 +595,16 @@ sticky-music-player {
     }
     
     .volume-control,
-    .visualizer {
+    .queue-btn {
         display: none;
+    }
+    
+    #sticky-queue-drawer {
+        right: 0;
+        left: 0;
+        width: 100%;
+        max-height: 60vh;
+        border-radius: 12px 12px 0 0;
     }
 }
         `;
@@ -496,17 +672,31 @@ sticky-music-player {
                 <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" value="0.8">
             </div>
 
-            <div class="visualizer" id="visualizer">
-                <div class="vis-bar"></div>
-                <div class="vis-bar"></div>
-                <div class="vis-bar"></div>
-                <div class="vis-bar"></div>
-                <div class="vis-bar"></div>
-            </div>
+            <button class="control-btn queue-btn" id="queueBtn" title="Queue">
+                <svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zm17-4v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4z"/></svg>
+            </button>
         `;
         
-        // Append to body with fixed positioning
+        // Create queue drawer
+        const drawer = document.createElement('div');
+        drawer.id = 'sticky-queue-drawer';
+        drawer.innerHTML = `
+            <div class="drawer-header">
+                <span class="drawer-title">Queue</span>
+                <button class="control-btn drawer-close" id="drawerClose">
+                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div class="drawer-search">
+                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <input type="text" class="search-input" id="queueSearch" placeholder="Search songs...">
+            </div>
+            <div class="drawer-body" id="drawerBody"></div>
+        `;
+        
+        // Append both to body
         document.body.appendChild(player);
+        document.body.appendChild(drawer);
         
         // Add padding to body so content doesn't go under the player
         document.body.style.paddingBottom = '90px';
@@ -540,6 +730,9 @@ sticky-music-player {
             const volumeBtn = document.querySelector('#volumeBtn');
             const volumeSlider = document.querySelector('#volumeSlider');
             const progressBar = document.querySelector('#progressBar');
+            const queueBtn = document.querySelector('#queueBtn');
+            const drawerClose = document.querySelector('#drawerClose');
+            const queueSearch = document.querySelector('#queueSearch');
 
             if (!playBtn) return;
 
@@ -551,11 +744,30 @@ sticky-music-player {
             volumeBtn.addEventListener('click', () => this._toggleMute());
             volumeSlider.addEventListener('input', (e) => this._setVolume(e.target.value));
 
+            // Queue drawer
+            if (queueBtn) queueBtn.addEventListener('click', () => this._toggleDrawer());
+            if (drawerClose) drawerClose.addEventListener('click', () => this._toggleDrawer());
+            if (queueSearch) queueSearch.addEventListener('input', (e) => {
+                this._searchQuery = e.target.value.toLowerCase();
+                this._renderDrawer();
+            });
+
             progressBar.addEventListener('click', (e) => {
                 const rect = progressBar.getBoundingClientRect();
                 const percent = (e.clientX - rect.left) / rect.width;
                 if (this._audio.duration) {
                     this._audio.currentTime = percent * this._audio.duration;
+                }
+            });
+            
+            // Close drawer on outside click
+            document.addEventListener('click', (e) => {
+                const drawer = document.getElementById('sticky-queue-drawer');
+                const qBtn = document.getElementById('queueBtn');
+                if (drawer && this._drawerOpen && 
+                    !drawer.contains(e.target) && 
+                    !qBtn.contains(e.target)) {
+                    this._toggleDrawer();
                 }
             });
         }, 100);
@@ -729,7 +941,6 @@ sticky-music-player {
         
         if (playIcon) playIcon.style.display = 'none';
         if (pauseIcon) pauseIcon.style.display = 'block';
-        this._startVisualizer();
     }
 
     _onPause() {
@@ -739,17 +950,72 @@ sticky-music-player {
         
         if (playIcon) playIcon.style.display = 'block';
         if (pauseIcon) pauseIcon.style.display = 'none';
-        this._stopVisualizer();
     }
 
-    _startVisualizer() {
-        const bars = document.querySelectorAll('.vis-bar');
-        bars.forEach(bar => bar.classList.add('active'));
+    _toggleDrawer() {
+        this._drawerOpen = !this._drawerOpen;
+        const drawer = document.getElementById('sticky-queue-drawer');
+        const qBtn = document.getElementById('queueBtn');
+        
+        if (drawer) drawer.classList.toggle('open', this._drawerOpen);
+        if (qBtn) qBtn.classList.toggle('active', this._drawerOpen);
+        
+        if (this._drawerOpen) this._renderDrawer();
     }
 
-    _stopVisualizer() {
-        const bars = document.querySelectorAll('.vis-bar');
-        bars.forEach(bar => bar.classList.remove('active'));
+    _renderDrawer() {
+        const body = document.getElementById('drawerBody');
+        if (!body) return;
+
+        const filtered = this._songs.filter(song => {
+            if (!this._searchQuery) return true;
+            const title = (song.title || '').toLowerCase();
+            const artist = (song.artist || '').toLowerCase();
+            const album = (song.album || '').toLowerCase();
+            return title.includes(this._searchQuery) || 
+                   artist.includes(this._searchQuery) || 
+                   album.includes(this._searchQuery);
+        });
+
+        if (filtered.length === 0) {
+            body.innerHTML = '<div class="queue-empty">No songs found</div>';
+            return;
+        }
+
+        body.innerHTML = filtered.map((song, i) => {
+            const actualIndex = this._songs.indexOf(song);
+            const isActive = actualIndex === this._currentSong;
+            const artHTML = song.coverImage 
+                ? `<img src="${this._escapeHtml(song.coverImage)}" alt="">`
+                : '';
+            
+            return `
+                <div class="queue-song ${isActive ? 'active' : ''}" data-index="${actualIndex}">
+                    <span class="queue-num">${i + 1}</span>
+                    <div class="queue-art">${artHTML}</div>
+                    <div class="queue-info">
+                        <div class="queue-song-title">${this._escapeHtml(song.title || 'Unknown')}</div>
+                        <div class="queue-song-artist">${this._escapeHtml(song.artist || '—')}</div>
+                    </div>
+                    <span class="queue-duration">${song.duration || ''}</span>
+                </div>
+            `;
+        }).join('');
+
+        // Bind click events
+        body.querySelectorAll('.queue-song').forEach(row => {
+            row.addEventListener('click', () => {
+                const index = parseInt(row.dataset.index);
+                this._loadSong(index, true);
+                this._toggleDrawer();
+            });
+        });
+    }
+
+    _escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     _formatTime(seconds) {
