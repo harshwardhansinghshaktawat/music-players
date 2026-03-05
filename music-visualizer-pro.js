@@ -13,7 +13,7 @@ class MusicVisualizerPro extends HTMLElement {
         this._off2Canvas = null;
         this._off2Ctx = null;
         
-        // Dimensions
+        // Dimensions (hardcoded settings from original)
         this._width = 0;
         this._height = 0;
         this._cx = 0;
@@ -26,7 +26,6 @@ class MusicVisualizerPro extends HTMLElement {
         this._audioContext = null;
         this._vizAnalyser = null;
         this._beatAnalyser = null;
-        this._srcNode = null;
         this._audioElement = null;
         this._isPlaying = false;
         this._currentVolume = 0.8;
@@ -73,6 +72,7 @@ class MusicVisualizerPro extends HTMLElement {
         
         // Particles
         this._particles = [];
+        this._particleCount = 420; // Only controllable setting
         
         // Animation
         this._animationId = null;
@@ -89,23 +89,9 @@ class MusicVisualizerPro extends HTMLElement {
         this._bgReady = false;
         this._coverImage = null;
         this._coverReady = false;
+        this._bgSource = 'random'; // Only controllable setting
         
-        // Settings
-        this._settings = {
-            particleCount: 420,
-            particleSpeed: 1.8,
-            ringSize: 0.240,
-            ringHeight: 0.100,
-            centerSize: 0.79,
-            showCoverArt: true,
-            bgSource: 'random',
-            centerSource: 'cover',
-            spectrumStyle: 'smooth',
-            glowIntensity: 1.0,
-            beatSensitivity: 1.0
-        };
-        
-        // Color scheme
+        // Color scheme (only controllable setting)
         this._colorScheme = {
             c1: '#00ffff',
             c2: '#9b59b6',
@@ -118,14 +104,7 @@ class MusicVisualizerPro extends HTMLElement {
     }
     
     static get observedAttributes() {
-        return [
-            'player-data', 'player-name', 'primary-color', 'secondary-color', 
-            'background-color', 'surface-color', 'text-primary', 'text-secondary', 
-            'accent-color', 'border-radius', 'title-font-family', 'body-font-family',
-            'particle-count', 'particle-speed', 'ring-size', 'ring-height', 
-            'center-size', 'show-cover-art', 'bg-source', 'center-source',
-            'spectrum-style', 'glow-intensity', 'beat-sensitivity', 'color-scheme'
-        ];
+        return ['player-data', 'bg-source', 'particle-count', 'color-scheme'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
@@ -140,31 +119,12 @@ class MusicVisualizerPro extends HTMLElement {
             } catch (e) {
                 console.error('Error parsing player data:', e);
             }
-        } else if (name === 'particle-count') {
-            this._settings.particleCount = parseInt(newValue) || 420;
-            this._initParticles();
-        } else if (name === 'particle-speed') {
-            this._settings.particleSpeed = parseFloat(newValue) || 1.8;
-        } else if (name === 'ring-size') {
-            this._settings.ringSize = parseFloat(newValue) || 0.240;
-            this._updateDimensions();
-        } else if (name === 'ring-height') {
-            this._settings.ringHeight = parseFloat(newValue) || 0.100;
-            this._updateDimensions();
-        } else if (name === 'center-size') {
-            this._settings.centerSize = parseFloat(newValue) || 0.79;
-            this._updateDimensions();
         } else if (name === 'bg-source') {
-            this._settings.bgSource = newValue || 'random';
+            this._bgSource = newValue || 'random';
             this._loadBackgroundImage();
-        } else if (name === 'center-source') {
-            this._settings.centerSource = newValue || 'cover';
-        } else if (name === 'spectrum-style') {
-            this._settings.spectrumStyle = newValue || 'smooth';
-        } else if (name === 'glow-intensity') {
-            this._settings.glowIntensity = parseFloat(newValue) || 1.0;
-        } else if (name === 'beat-sensitivity') {
-            this._settings.beatSensitivity = parseFloat(newValue) || 1.0;
+        } else if (name === 'particle-count') {
+            this._particleCount = parseInt(newValue) || 420;
+            this._initParticles();
         } else if (name === 'color-scheme' && newValue) {
             this._applyColorScheme(newValue);
         }
@@ -182,7 +142,6 @@ class MusicVisualizerPro extends HTMLElement {
             this._renderBrowser();
         }
         
-        // Handle resize
         const resizeObserver = new ResizeObserver(() => {
             this._updateDimensions();
         });
@@ -199,21 +158,6 @@ class MusicVisualizerPro extends HTMLElement {
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
                 
                 :host {
-                    --primary-color: #00ffff;
-                    --secondary-color: #9b59b6;
-                    --background-color: #ffffff;
-                    --surface-color: #f5f5f5;
-                    --text-primary: #000000;
-                    --text-secondary: #666666;
-                    --accent-color: #00ffff;
-                    --border-color: rgba(0, 255, 255, 0.3);
-                    --glow-color: #00ffff;
-                    --bg-tint: #001122;
-                    
-                    --title-font: 'Inter', sans-serif;
-                    --body-font: 'Inter', sans-serif;
-                    --border-radius: 12px;
-                    
                     display: block;
                     width: 100%;
                     height: 100%;
@@ -278,7 +222,7 @@ class MusicVisualizerPro extends HTMLElement {
                 .song-title {
                     font-size: 1.25rem;
                     font-weight: 700;
-                    font-family: var(--title-font);
+                    font-family: 'Inter', sans-serif;
                     margin-bottom: 0.25rem;
                     letter-spacing: 0.5px;
                 }
@@ -292,9 +236,9 @@ class MusicVisualizerPro extends HTMLElement {
                 .bpm-badge {
                     padding: 0.5rem 1rem;
                     background: rgba(0, 0, 0, 0.6);
-                    border: 1px solid var(--border-color);
-                    border-radius: calc(var(--border-radius) / 2);
-                    color: var(--accent-color);
+                    border: 1px solid rgba(0, 255, 255, 0.3);
+                    border-radius: 6px;
+                    color: rgba(0, 255, 255, 0.45);
                     font-size: 0.75rem;
                     letter-spacing: 2px;
                     text-transform: uppercase;
@@ -318,7 +262,7 @@ class MusicVisualizerPro extends HTMLElement {
                 .browser-sidebar {
                     width: 300px;
                     background: rgba(0, 0, 0, 0.85);
-                    border-right: 1px solid var(--border-color);
+                    border-right: 1px solid rgba(0, 255, 255, 0.3);
                     backdrop-filter: blur(20px);
                     display: flex;
                     flex-direction: column;
@@ -327,7 +271,7 @@ class MusicVisualizerPro extends HTMLElement {
                 
                 .browser-header {
                     padding: 1rem;
-                    border-bottom: 1px solid var(--border-color);
+                    border-bottom: 1px solid rgba(0, 255, 255, 0.3);
                 }
                 
                 .view-toggle {
@@ -335,8 +279,8 @@ class MusicVisualizerPro extends HTMLElement {
                     gap: 0.5rem;
                     background: rgba(0, 0, 0, 0.4);
                     padding: 0.25rem;
-                    border-radius: calc(var(--border-radius) / 2);
-                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    border: 1px solid rgba(0, 255, 255, 0.3);
                     margin-bottom: 1rem;
                 }
                 
@@ -345,7 +289,7 @@ class MusicVisualizerPro extends HTMLElement {
                     padding: 0.5rem;
                     background: transparent;
                     border: none;
-                    border-radius: calc(var(--border-radius) / 3);
+                    border-radius: 4px;
                     color: rgba(255, 255, 255, 0.6);
                     font-size: 0.8rem;
                     font-weight: 600;
@@ -356,7 +300,7 @@ class MusicVisualizerPro extends HTMLElement {
                 }
                 
                 .view-toggle-btn.active {
-                    background: var(--accent-color);
+                    background: #00ffff;
                     color: #000;
                 }
                 
@@ -368,11 +312,11 @@ class MusicVisualizerPro extends HTMLElement {
                     width: 100%;
                     padding: 0.625rem 0.875rem;
                     background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid var(--border-color);
-                    border-radius: calc(var(--border-radius) / 2);
+                    border: 1px solid rgba(0, 255, 255, 0.3);
+                    border-radius: 6px;
                     color: white;
                     font-size: 0.875rem;
-                    font-family: var(--body-font);
+                    font-family: 'Inter', sans-serif;
                 }
                 
                 .browser-search input::placeholder {
@@ -381,7 +325,7 @@ class MusicVisualizerPro extends HTMLElement {
                 
                 .browser-search input:focus {
                     outline: none;
-                    border-color: var(--accent-color);
+                    border-color: #00ffff;
                     background: rgba(255, 255, 255, 0.15);
                 }
                 
@@ -400,7 +344,7 @@ class MusicVisualizerPro extends HTMLElement {
                 }
                 
                 .browser-content::-webkit-scrollbar-thumb {
-                    background: var(--border-color);
+                    background: rgba(0, 255, 255, 0.3);
                     border-radius: 3px;
                 }
                 
@@ -412,28 +356,28 @@ class MusicVisualizerPro extends HTMLElement {
                 
                 .album-card {
                     background: rgba(255, 255, 255, 0.05);
-                    border: 2px solid var(--border-color);
-                    border-radius: calc(var(--border-radius) / 1.5);
+                    border: 2px solid rgba(0, 255, 255, 0.3);
+                    border-radius: 8px;
                     padding: 0.75rem;
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
                 
                 .album-card:hover {
-                    border-color: var(--accent-color);
+                    border-color: #00ffff;
                     background: rgba(255, 255, 255, 0.1);
                     transform: translateY(-2px);
                 }
                 
                 .album-card.active {
-                    border-color: var(--accent-color);
+                    border-color: #00ffff;
                     background: rgba(0, 255, 255, 0.15);
                 }
                 
                 .album-cover {
                     width: 100%;
                     aspect-ratio: 1;
-                    border-radius: calc(var(--border-radius) / 2);
+                    border-radius: 6px;
                     background: rgba(255, 255, 255, 0.1);
                     margin-bottom: 0.5rem;
                     overflow: hidden;
@@ -478,26 +422,26 @@ class MusicVisualizerPro extends HTMLElement {
                     gap: 0.75rem;
                     padding: 0.625rem;
                     background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid var(--border-color);
-                    border-radius: calc(var(--border-radius) / 2);
+                    border: 1px solid rgba(0, 255, 255, 0.3);
+                    border-radius: 6px;
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
                 
                 .song-item:hover {
                     background: rgba(255, 255, 255, 0.1);
-                    border-color: var(--accent-color);
+                    border-color: #00ffff;
                 }
                 
                 .song-item.active {
                     background: rgba(0, 255, 255, 0.15);
-                    border-color: var(--accent-color);
+                    border-color: #00ffff;
                 }
                 
                 .song-cover {
                     width: 2.75rem;
                     height: 2.75rem;
-                    border-radius: calc(var(--border-radius) / 3);
+                    border-radius: 4px;
                     overflow: hidden;
                     background: rgba(255, 255, 255, 0.1);
                 }
@@ -535,8 +479,8 @@ class MusicVisualizerPro extends HTMLElement {
                     width: 100%;
                     padding: 0.625rem;
                     background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid var(--border-color);
-                    border-radius: calc(var(--border-radius) / 2);
+                    border: 1px solid rgba(0, 255, 255, 0.3);
+                    border-radius: 6px;
                     color: white;
                     font-size: 0.875rem;
                     font-weight: 600;
@@ -548,13 +492,13 @@ class MusicVisualizerPro extends HTMLElement {
                 }
                 
                 .back-btn:hover {
-                    background: var(--accent-color);
+                    background: #00ffff;
                     color: #000;
                 }
                 
                 .controls-footer {
                     background: rgba(0, 0, 0, 0.85);
-                    border-top: 1px solid var(--border-color);
+                    border-top: 1px solid rgba(0, 255, 255, 0.3);
                     padding: 1rem 1.5rem;
                     backdrop-filter: blur(20px);
                     pointer-events: auto;
@@ -579,7 +523,7 @@ class MusicVisualizerPro extends HTMLElement {
                     top: 0;
                     left: 0;
                     height: 100%;
-                    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+                    background: linear-gradient(90deg, #00ffff, #9b59b6);
                     border-radius: 3px;
                     transition: width 0.1s linear;
                 }
@@ -619,22 +563,22 @@ class MusicVisualizerPro extends HTMLElement {
                     align-items: center;
                     justify-content: center;
                     background: rgba(255, 255, 255, 0.1);
-                    border: 1px solid var(--border-color);
+                    border: 1px solid rgba(0, 255, 255, 0.3);
                     color: white;
                     cursor: pointer;
                     transition: all 0.2s ease;
-                    border-radius: calc(var(--border-radius) / 2);
+                    border-radius: 6px;
                 }
                 
                 .control-btn:hover {
-                    background: var(--accent-color);
-                    border-color: var(--accent-color);
+                    background: #00ffff;
+                    border-color: #00ffff;
                     color: #000;
                 }
                 
                 .control-btn.active {
-                    background: var(--accent-color);
-                    border-color: var(--accent-color);
+                    background: #00ffff;
+                    border-color: #00ffff;
                     color: #000;
                 }
                 
@@ -647,8 +591,8 @@ class MusicVisualizerPro extends HTMLElement {
                 .play-btn {
                     width: 3rem;
                     height: 3rem;
-                    background: var(--accent-color);
-                    border-color: var(--accent-color);
+                    background: #00ffff;
+                    border-color: #00ffff;
                     color: #000;
                 }
                 
@@ -682,7 +626,7 @@ class MusicVisualizerPro extends HTMLElement {
                     -webkit-appearance: none;
                     width: 12px;
                     height: 12px;
-                    background: var(--accent-color);
+                    background: #00ffff;
                     border-radius: 50%;
                     cursor: pointer;
                 }
@@ -698,7 +642,7 @@ class MusicVisualizerPro extends HTMLElement {
                         width: 100%;
                         height: 250px;
                         border-right: none;
-                        border-bottom: 1px solid var(--border-color);
+                        border-bottom: 1px solid rgba(0, 255, 255, 0.3);
                     }
                     
                     .browser-section {
@@ -797,14 +741,13 @@ class MusicVisualizerPro extends HTMLElement {
             </div>
         `;
     }
-    
-    _setupCanvases() {
+
+_setupCanvases() {
         this._bgCanvas = this._shadow.getElementById('bgCanvas');
         this._mainCanvas = this._shadow.getElementById('mainCanvas');
         this._bgCtx = this._bgCanvas.getContext('2d');
         this._mainCtx = this._mainCanvas.getContext('2d');
         
-        // Create offscreen canvases
         this._off1Canvas = document.createElement('canvas');
         this._off1Ctx = this._off1Canvas.getContext('2d');
         this._off2Canvas = document.createElement('canvas');
@@ -820,9 +763,10 @@ class MusicVisualizerPro extends HTMLElement {
         this._cx = this._width / 2;
         this._cy = this._height / 2;
         
-        this._baseRadius = Math.min(this._width, this._height) * this._settings.ringSize;
-        this._maxHeight = Math.min(this._width, this._height) * this._settings.ringHeight;
-        this._centerRadius = this._baseRadius * this._settings.centerSize;
+        // Hardcoded from original values
+        this._baseRadius = Math.min(this._width, this._height) * 0.240;
+        this._maxHeight = Math.min(this._width, this._height) * 0.100;
+        this._centerRadius = this._baseRadius * 0.79;
         
         if (this._bgCanvas) {
             this._bgCanvas.width = this._width;
@@ -893,21 +837,19 @@ class MusicVisualizerPro extends HTMLElement {
         };
     }
 
-_initAudio() {
+    _initAudio() {
         this._audioElement = document.createElement('audio');
         this._audioElement.crossOrigin = 'anonymous';
         
         try {
             this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
-            // Visualizer analyser
             this._vizAnalyser = this._audioContext.createAnalyser();
             this._vizAnalyser.fftSize = 4096;
             this._vizAnalyser.smoothingTimeConstant = 0.0;
             this._bufLen = this._vizAnalyser.frequencyBinCount;
             this._vizData = new Uint8Array(this._bufLen);
             
-            // Beat analyser
             this._beatAnalyser = this._audioContext.createAnalyser();
             this._beatAnalyser.fftSize = 2048;
             this._beatAnalyser.smoothingTimeConstant = 0.4;
@@ -942,20 +884,20 @@ _initAudio() {
     
     _initParticles() {
         this._particles = [];
-        for (let i = 0; i < this._settings.particleCount; i++) {
+        for (let i = 0; i < this._particleCount; i++) {
             this._particles.push(new Particle());
         }
     }
     
     _loadBackgroundImage() {
-        if (this._settings.bgSource === 'random') {
+        if (this._bgSource === 'random') {
             this._bgImage = new Image();
             this._bgImage.crossOrigin = 'anonymous';
             this._bgImage.src = `https://picsum.photos/1920/1080?random=${Math.floor(Math.random() * 1000)}`;
             this._bgImage.onload = () => { this._bgReady = true; };
-        } else if (this._settings.bgSource === 'cover' && this._currentPlaylist && this._currentSongIndex >= 0) {
+        } else if (this._bgSource === 'cover' && this._currentPlaylist.length > 0 && this._currentSongIndex >= 0) {
             const song = this._currentPlaylist[this._currentSongIndex];
-            if (song.coverImage) {
+            if (song && song.coverImage) {
                 this._bgImage = new Image();
                 this._bgImage.crossOrigin = 'anonymous';
                 this._bgImage.src = song.coverImage;
@@ -989,7 +931,6 @@ _initAudio() {
     }
     
     _setupEventListeners() {
-        // View toggle
         this._shadow.querySelectorAll('.view-toggle-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this._currentView = btn.dataset.view;
@@ -999,14 +940,12 @@ _initAudio() {
             });
         });
         
-        // Search
         const searchInput = this._shadow.querySelector('.search-input');
         searchInput.addEventListener('input', (e) => {
             this._searchQuery = e.target.value.toLowerCase();
             this._renderBrowser();
         });
         
-        // Playback controls
         this._shadow.querySelector('.play-btn').addEventListener('click', () => {
             if (!this._currentPlaylist.length || this._currentSongIndex === -1) {
                 this._playFirstSong();
@@ -1032,7 +971,6 @@ _initAudio() {
             this._shadow.querySelector('.repeat-btn').classList.toggle('active', this._isRepeat);
         });
         
-        // Volume control
         const volumeSlider = this._shadow.querySelector('.volume-slider');
         volumeSlider.addEventListener('input', (e) => {
             this._currentVolume = parseFloat(e.target.value);
@@ -1054,7 +992,6 @@ _initAudio() {
             }
         });
         
-        // Progress bar
         const progressBar = this._shadow.querySelector('.progress-bar-container');
         progressBar.addEventListener('click', (e) => {
             if (!this._audioElement || !this._audioElement.duration) return;
@@ -1098,16 +1035,14 @@ _initAudio() {
         this._updateSongInfo();
         this._renderBrowser();
         
-        // Load center image
-        if (this._settings.centerSource === 'cover' && song.coverImage) {
+        if (song.coverImage) {
             this._coverImage = new Image();
             this._coverImage.crossOrigin = 'anonymous';
             this._coverImage.src = song.coverImage;
             this._coverImage.onload = () => { this._coverReady = true; };
         }
         
-        // Load background if set to cover
-        if (this._settings.bgSource === 'cover') {
+        if (this._bgSource === 'cover') {
             this._loadBackgroundImage();
         }
     }
@@ -1327,10 +1262,7 @@ _initAudio() {
         return div.innerHTML;
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  ANIMATION LOOP
-    // ═══════════════════════════════════════════════════════════
-    
+    // ANIMATION LOOP
     _startAnimation() {
         this._animate();
     }
@@ -1343,12 +1275,7 @@ _initAudio() {
         if (this._live && this._vizAnalyser) {
             this._vizAnalyser.getByteFrequencyData(this._vizData);
             this._buildRingArray(sr);
-            
-            if (!this._micMode && this._kickTimestamps.length > 0) {
-                this._tickLookahead();
-            } else {
-                this._tickRTBeat();
-            }
+            this._tickRTBeat();
         }
         
         this._decayKick();
@@ -1362,41 +1289,14 @@ _initAudio() {
         this._drawCenter();
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  BEAT DETECTION
-    // ═══════════════════════════════════════════════════════════
-    
-    _tickLookahead() {
-        if (!this._live || this._micMode || this._kickTimestamps.length === 0) return;
-        
-        const songTime = (this._audioContext ? this._audioContext.currentTime : 0) - this._playbackStart;
-        const horizon = songTime + 0.020; // 20ms lookahead
-        
-        while (
-            this._nextKickIdx < this._kickTimestamps.length &&
-            this._kickTimestamps[this._nextKickIdx] < songTime - 0.04
-        ) this._nextKickIdx++;
-        
-        while (
-            this._nextKickIdx < this._kickTimestamps.length &&
-            this._kickTimestamps[this._nextKickIdx] <= horizon
-        ) {
-            this._fireKick(1.0);
-            this._nextKickIdx++;
-        }
-        
-        if (this._songDuration > 0 && songTime >= this._songDuration - 0.08) {
-            this._nextKickIdx = 0;
-        }
-    }
-    
+    // BEAT DETECTION
     _tickRTBeat() {
         if (!this._beatData || !this._live || !this._beatAnalyser) return;
         
         this._beatAnalyser.getByteFrequencyData(this._beatData);
         
-        const lo = this._freqToBin(30, this._beatAnalyser);
-        const hi = this._freqToBin(120, this._beatAnalyser);
+        const lo = this._freqToBin(30);
+        const hi = this._freqToBin(120);
         
         let sq = 0, n = 0;
         for (let i = lo; i <= hi; i++) {
@@ -1427,17 +1327,16 @@ _initAudio() {
             return;
         }
         
-        const sensitivity = 1.35 * this._settings.beatSensitivity;
-        if (rms > avg * sensitivity && rms > 0.06) {
+        if (rms > avg * 1.35 && rms > 0.06) {
             const mag = Math.min(1.0, (rms - avg) / Math.max(0.01, avg * 0.5));
             this._fireKick(0.55 + mag * 0.45);
             this._rtCooldown = 22;
         }
     }
     
-    _freqToBin(freq, analyser) {
+    _freqToBin(freq) {
         const nyq = (this._audioContext ? this._audioContext.sampleRate : 44100) / 2;
-        return Math.min(Math.round(freq / nyq * analyser.frequencyBinCount), analyser.frequencyBinCount - 1);
+        return Math.min(Math.round(freq / nyq * this._beatAnalyser.frequencyBinCount), this._beatAnalyser.frequencyBinCount - 1);
     }
     
     _fireKick(strength) {
@@ -1456,10 +1355,7 @@ _initAudio() {
         this._bgPulse = this._bgEnv * this._bgEnv;
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  RING ARRAY
-    // ═══════════════════════════════════════════════════════════
-    
+    // RING ARRAY
     _buildRingArray(sr) {
         const N_HALF = 128;
         const N_RING = 256;
@@ -1512,10 +1408,7 @@ _initAudio() {
         }
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  KEN BURNS EFFECT
-    // ═══════════════════════════════════════════════════════════
-    
+    // KEN BURNS EFFECT
     _updateKenBurns() {
         this._kenBurnsTick++;
         if (this._kenBurnsTick % 500 === 0) {
@@ -1528,14 +1421,11 @@ _initAudio() {
         this._kenBurnsScale += (this._kenBurnsTS - this._kenBurnsScale) * 0.0015;
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  PARTICLES
-    // ═══════════════════════════════════════════════════════════
-    
+    // PARTICLES
     _updateParticles() {
         const Z_NEAR = 1;
         this._particles.forEach(p => {
-            p.z3 -= (p.vz * this._settings.particleSpeed) + this._kickStrength * 9.0;
+            p.z3 -= p.vz + this._kickStrength * 9.0;
             if (p.z3 < Z_NEAR) p.reset(false);
         });
     }
@@ -1573,10 +1463,7 @@ _initAudio() {
         });
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  BACKGROUND
-    // ═══════════════════════════════════════════════════════════
-    
+    // BACKGROUND
     _drawBackground() {
         this._bgCtx.clearRect(0, 0, this._width, this._height);
         
@@ -1633,8 +1520,8 @@ _initAudio() {
             this._cx, this._cy, 0,
             this._cx, this._cy, Math.min(this._width, this._height) * 0.50
         );
-        rg.addColorStop(0, this._hexToRgba(this._colorScheme.c3, this._kickStrength * 0.30 * this._settings.glowIntensity));
-        rg.addColorStop(0.40, this._hexToRgba(this._colorScheme.glow, this._kickStrength * 0.18 * this._settings.glowIntensity));
+        rg.addColorStop(0, this._hexToRgba(this._colorScheme.c3, this._kickStrength * 0.30));
+        rg.addColorStop(0.40, this._hexToRgba(this._colorScheme.glow, this._kickStrength * 0.18));
         rg.addColorStop(1, 'transparent');
         this._mainCtx.fillStyle = rg;
         this._mainCtx.globalCompositeOperation = 'screen';
@@ -1642,10 +1529,7 @@ _initAudio() {
         this._mainCtx.restore();
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  RING
-    // ═══════════════════════════════════════════════════════════
-    
+    // RING
     _drawRing() {
         // Blurred layer 1
         this._off1Ctx.clearRect(0, 0, this._width, this._height);
@@ -1710,8 +1594,8 @@ _initAudio() {
         sg.addColorStop(1, this._colorScheme.c3);
         
         this._mainCtx.strokeStyle = sg;
-        this._mainCtx.lineWidth = 1.6 * this._settings.glowIntensity;
-        this._mainCtx.shadowBlur = 10 * this._settings.glowIntensity;
+        this._mainCtx.lineWidth = 1.6;
+        this._mainCtx.shadowBlur = 10;
         this._mainCtx.shadowColor = this._colorScheme.glow;
         this._mainCtx.stroke();
         this._mainCtx.restore();
@@ -1727,7 +1611,7 @@ _initAudio() {
             const r = this._baseRadius + v * this._maxHeight;
             
             this._mainCtx.globalAlpha = (v - 0.40) / 0.60 * 0.85;
-            this._mainCtx.shadowBlur = 12 * this._settings.glowIntensity;
+            this._mainCtx.shadowBlur = 12;
             this._mainCtx.shadowColor = this._colorScheme.c1;
             this._mainCtx.fillStyle = this._colorScheme.c3;
             this._mainCtx.beginPath();
@@ -1738,6 +1622,14 @@ _initAudio() {
             );
             this._mainCtx.fill();
         }
+        this._mainCtx.restore();
+        
+        this._mainCtx.save();
+        this._mainCtx.strokeStyle = this._colorScheme.c1 + '22';
+        this._mainCtx.lineWidth = 1;
+        this._mainCtx.beginPath();
+        this._mainCtx.arc(this._cx, this._cy, this._baseRadius, 0, Math.PI * 2);
+        this._mainCtx.stroke();
         this._mainCtx.restore();
     }
     
@@ -1771,10 +1663,7 @@ _initAudio() {
         ctx.closePath();
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  CENTER
-    // ═══════════════════════════════════════════════════════════
-    
+    // CENTER
     _drawCenter() {
         const cr = this._centerRadius * (1.0 + this._kickStrength * 0.045);
         
@@ -1784,7 +1673,7 @@ _initAudio() {
         this._mainCtx.arc(this._cx, this._cy, cr - 2, 0, Math.PI * 2);
         this._mainCtx.clip();
         
-        if (this._coverReady && this._coverImage && this._settings.centerSource === 'cover') {
+        if (this._coverReady && this._coverImage) {
             this._mainCtx.drawImage(this._coverImage, this._cx - cr, this._cy - cr, cr * 2, cr * 2);
             this._mainCtx.fillStyle = this._colorScheme.bgTint + '44';
             this._mainCtx.fillRect(this._cx - cr, this._cy - cr, cr * 2, cr * 2);
@@ -1807,7 +1696,7 @@ _initAudio() {
         this._mainCtx.save();
         this._mainCtx.strokeStyle = this._colorScheme.c1 + Math.floor(20 + this._kickStrength * 80).toString(16).padStart(2, '0');
         this._mainCtx.lineWidth = 8;
-        this._mainCtx.shadowBlur = (20 + this._kickStrength * 28) * this._settings.glowIntensity;
+        this._mainCtx.shadowBlur = 20 + this._kickStrength * 28;
         this._mainCtx.shadowColor = this._colorScheme.glow;
         this._mainCtx.globalAlpha = 0.25 + this._kickStrength * 0.35;
         this._mainCtx.beginPath();
@@ -1818,7 +1707,7 @@ _initAudio() {
         this._mainCtx.save();
         this._mainCtx.strokeStyle = this._colorScheme.c1;
         this._mainCtx.lineWidth = 3.5;
-        this._mainCtx.shadowBlur = (22 + this._kickStrength * 30) * this._settings.glowIntensity;
+        this._mainCtx.shadowBlur = 22 + this._kickStrength * 30;
         this._mainCtx.shadowColor = this._colorScheme.glow;
         this._mainCtx.globalAlpha = 0.88 + this._kickStrength * 0.12;
         this._mainCtx.beginPath();
@@ -1844,7 +1733,7 @@ _initAudio() {
             
             this._mainCtx.font = `900 ${fs}px 'Courier New', monospace`;
             
-            const glowSize = (10 + this._kickStrength * 38) * this._settings.glowIntensity;
+            const glowSize = 10 + this._kickStrength * 38;
             const glowAlpha = 0.86 + this._kickStrength * 0.14;
             
             // Song title
@@ -1872,10 +1761,7 @@ _initAudio() {
         }
     }
     
-    // ═══════════════════════════════════════════════════════════
-    //  UTILITIES
-    // ═══════════════════════════════════════════════════════════
-    
+    // UTILITIES
     _hexToRgba(hex, a) {
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
@@ -1911,10 +1797,7 @@ _initAudio() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════
-//  PARTICLE CLASS
-// ═══════════════════════════════════════════════════════════
-
+// PARTICLE CLASS
 class Particle {
     constructor() {
         this.reset(true);
