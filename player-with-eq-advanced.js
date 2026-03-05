@@ -349,9 +349,9 @@ advanced-music-player-pro *::after {
 }
 .amp-scrub-head {
     position:absolute; top:50%; left:0;
-    width:12px; height:12px;
+    width:4px; height:12px;
     background:var(--t1); border:2px solid var(--acc);
-    border-radius:50%; transform:translate(-50%,-50%);
+    border-radius:2px; transform:translate(-50%,-50%);
     opacity:0; transition:opacity .15s; pointer-events:none;
     box-shadow:0 0 6px rgba(59,130,246,.5);
 }
