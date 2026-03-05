@@ -1,4 +1,4 @@
-class ModernMusicPlayer extends HTMLElement {
+class MusicPlayerPro extends HTMLElement {
     constructor() {
         super();
         this._shadow = this.attachShadow({ mode: 'open' });
@@ -17,30 +17,31 @@ class ModernMusicPlayer extends HTMLElement {
         this._root = document.createElement('div');
         this._root.innerHTML = `
             <style>
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
                 
                 :host {
                     --primary-color: #0066cc;
                     --secondary-color: #0052a3;
                     --background-color: #ffffff;
                     --surface-color: #f5f5f5;
-                    --surface-light: #e0e0e0;
                     --text-primary: #000000;
                     --text-secondary: #666666;
-                    --text-muted: #999999;
                     --accent-color: #cc0000;
-                    --success-color: #00802b;
                     --border-color: #cccccc;
-                    --radius-sm: 0.25rem;
-                    --radius-md: 0.375rem;
-                    --radius-lg: 0.5rem;
-                    --radius-xl: 0.75rem;
-                    --transition: all 0.2s ease;
+                    --hover-color: #e6f2ff;
+                    --active-color: #cce5ff;
+                    
+                    --title-font: 'Inter', sans-serif;
+                    --body-font: 'Inter', sans-serif;
+                    --border-radius: 12px;
+                    --spacing-sm: 0.5rem;
+                    --spacing-md: 1rem;
+                    --spacing-lg: 1.5rem;
                     
                     display: block;
                     width: 100%;
                     height: 100%;
-                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    font-family: var(--body-font);
                     box-sizing: border-box;
                 }
                 
@@ -48,11 +49,12 @@ class ModernMusicPlayer extends HTMLElement {
                     box-sizing: inherit;
                 }
                 
+                /* Main Container */
                 .player-container {
                     width: 100%;
                     height: 100%;
                     background: var(--background-color);
-                    border-radius: var(--radius-xl);
+                    border-radius: var(--border-radius);
                     overflow: hidden;
                     display: flex;
                     flex-direction: column;
@@ -60,10 +62,10 @@ class ModernMusicPlayer extends HTMLElement {
                     border: 1px solid var(--border-color);
                 }
                 
-                /* Header - COMPACT */
+                /* Header */
                 .player-header {
-                    padding: 0.75rem 1.25rem;
-                    background: var(--surface-color);
+                    padding: var(--spacing-md) var(--spacing-lg);
+                    background: var(--primary-color);
                     border-bottom: 1px solid var(--border-color);
                     display: flex;
                     justify-content: space-between;
@@ -74,20 +76,21 @@ class ModernMusicPlayer extends HTMLElement {
                 .player-title {
                     display: flex;
                     align-items: center;
-                    gap: 0.5rem;
+                    gap: var(--spacing-sm);
                 }
                 
                 .player-title svg {
-                    width: 1.5rem;
-                    height: 1.5rem;
-                    fill: var(--primary-color);
+                    width: 1.75rem;
+                    height: 1.75rem;
+                    fill: white;
                 }
                 
                 .player-title h1 {
                     margin: 0;
-                    font-size: 1.125rem;
+                    font-size: 1.25rem;
                     font-weight: 700;
-                    color: var(--primary-color);
+                    color: white;
+                    font-family: var(--title-font);
                 }
                 
                 /* Main Content Area */
@@ -98,7 +101,7 @@ class ModernMusicPlayer extends HTMLElement {
                     min-height: 0;
                 }
                 
-                /* Sidebar/Browser - COMPACT */
+                /* Sidebar */
                 .browser-sidebar {
                     width: 280px;
                     flex-shrink: 0;
@@ -111,31 +114,32 @@ class ModernMusicPlayer extends HTMLElement {
                 }
                 
                 .browser-header {
-                    padding: 0.75rem 1rem;
+                    padding: var(--spacing-md);
                     border-bottom: 1px solid var(--border-color);
                     flex-shrink: 0;
+                    background: white;
                 }
                 
                 .view-toggle {
                     display: flex;
-                    gap: 0.375rem;
-                    background: var(--background-color);
+                    gap: 0.5rem;
+                    background: var(--surface-color);
                     padding: 0.25rem;
-                    border-radius: var(--radius-md);
+                    border-radius: calc(var(--border-radius) / 2);
                     border: 1px solid var(--border-color);
                 }
                 
                 .view-toggle-btn {
                     flex: 1;
-                    padding: 0.375rem 0.75rem;
+                    padding: 0.5rem;
                     background: transparent;
                     border: none;
-                    border-radius: var(--radius-sm);
+                    border-radius: calc(var(--border-radius) / 3);
                     color: var(--text-secondary);
-                    font-size: 0.8125rem;
+                    font-size: 0.875rem;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: var(--transition);
+                    transition: all 0.2s ease;
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -143,8 +147,8 @@ class ModernMusicPlayer extends HTMLElement {
                 }
                 
                 .view-toggle-btn svg {
-                    width: 0.875rem;
-                    height: 0.875rem;
+                    width: 1rem;
+                    height: 1rem;
                     fill: currentColor;
                 }
                 
@@ -153,35 +157,41 @@ class ModernMusicPlayer extends HTMLElement {
                     color: white;
                 }
                 
+                .view-toggle-btn:not(.active):hover {
+                    background: var(--hover-color);
+                }
+                
                 .browser-search {
-                    margin-top: 0.75rem;
+                    margin-top: var(--spacing-md);
                     position: relative;
                 }
                 
                 .browser-search input {
                     width: 100%;
-                    padding: 0.5rem 0.75rem 0.5rem 2rem;
+                    padding: 0.625rem 0.875rem 0.625rem 2.25rem;
                     background: var(--background-color);
                     border: 1px solid var(--border-color);
-                    border-radius: var(--radius-md);
+                    border-radius: calc(var(--border-radius) / 2);
                     color: var(--text-primary);
-                    font-size: 0.8125rem;
-                    transition: var(--transition);
+                    font-size: 0.875rem;
+                    transition: all 0.2s ease;
+                    font-family: var(--body-font);
                 }
                 
                 .browser-search input:focus {
                     outline: none;
                     border-color: var(--primary-color);
+                    background: white;
                 }
                 
                 .browser-search svg {
                     position: absolute;
-                    left: 0.625rem;
+                    left: 0.75rem;
                     top: 50%;
                     transform: translateY(-50%);
-                    width: 0.875rem;
-                    height: 0.875rem;
-                    fill: var(--text-muted);
+                    width: 1rem;
+                    height: 1rem;
+                    fill: var(--text-secondary);
                     pointer-events: none;
                 }
                 
@@ -189,70 +199,64 @@ class ModernMusicPlayer extends HTMLElement {
                     flex: 1;
                     overflow-y: auto;
                     overflow-x: hidden;
-                    padding: 0.75rem;
+                    padding: var(--spacing-md);
                     min-height: 0;
                 }
                 
-                /* Custom Scrollbar */
                 .browser-content::-webkit-scrollbar {
-                    width: 5px;
+                    width: 6px;
                 }
                 
                 .browser-content::-webkit-scrollbar-track {
                     background: transparent;
-                    border-radius: 3px;
                 }
                 
                 .browser-content::-webkit-scrollbar-thumb {
-                    background: var(--surface-light);
+                    background: var(--border-color);
                     border-radius: 3px;
-                    transition: background 0.2s;
                 }
                 
                 .browser-content::-webkit-scrollbar-thumb:hover {
                     background: var(--primary-color);
                 }
                 
-                .browser-content {
-                    scrollbar-width: thin;
-                    scrollbar-color: var(--surface-light) transparent;
-                }
-                
-                /* Album Cards - COMPACT */
+                /* Album Cards */
                 .albums-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-                    gap: 0.625rem;
+                    gap: 0.75rem;
                 }
                 
                 .album-card {
                     background: var(--background-color);
-                    border: 1px solid var(--border-color);
-                    border-radius: var(--radius-md);
-                    padding: 0.625rem;
+                    border: 2px solid var(--border-color);
+                    border-radius: calc(var(--border-radius) / 1.5);
+                    padding: 0.75rem;
                     cursor: pointer;
-                    transition: var(--transition);
+                    transition: all 0.2s ease;
                     text-align: center;
                 }
                 
                 .album-card:hover {
                     border-color: var(--primary-color);
+                    background: var(--hover-color);
                     transform: translateY(-2px);
                 }
                 
                 .album-card.active {
                     border-color: var(--primary-color);
-                    background: var(--surface-light);
+                    background: var(--active-color);
                 }
                 
                 .album-cover {
                     width: 100%;
                     aspect-ratio: 1;
-                    border-radius: var(--radius-sm);
-                    background: var(--surface-light);
-                    margin-bottom: 0.5rem;
+                    border-radius: calc(var(--border-radius) / 2);
+                    background: var(--surface-color);
+                    margin-bottom: 0.625rem;
                     overflow: hidden;
                     position: relative;
+                    border: 1px solid var(--border-color);
                 }
                 
                 .album-cover img {
@@ -267,14 +271,14 @@ class ModernMusicPlayer extends HTMLElement {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: var(--primary-color);
+                    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
                 }
                 
                 .album-cover-placeholder svg {
-                    width: 2rem;
-                    height: 2rem;
+                    width: 2.5rem;
+                    height: 2.5rem;
                     fill: white;
-                    opacity: 0.5;
+                    opacity: 0.8;
                 }
                 
                 .album-info {
@@ -283,7 +287,7 @@ class ModernMusicPlayer extends HTMLElement {
                 
                 .album-name {
                     font-weight: 600;
-                    font-size: 0.75rem;
+                    font-size: 0.8125rem;
                     color: var(--text-primary);
                     margin-bottom: 0.25rem;
                     white-space: nowrap;
@@ -292,8 +296,8 @@ class ModernMusicPlayer extends HTMLElement {
                 }
                 
                 .album-artist {
-                    font-size: 0.6875rem;
-                    color: var(--text-muted);
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
@@ -303,53 +307,54 @@ class ModernMusicPlayer extends HTMLElement {
                     display: flex;
                     align-items: center;
                     gap: 0.25rem;
-                    font-size: 0.6875rem;
-                    color: var(--text-muted);
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
                     margin-top: 0.375rem;
                 }
                 
                 .album-count svg {
-                    width: 0.75rem;
-                    height: 0.75rem;
+                    width: 0.875rem;
+                    height: 0.875rem;
                     fill: currentColor;
                 }
                 
-                /* Song List - COMPACT */
+                /* Song List */
                 .songs-list {
                     display: flex;
                     flex-direction: column;
-                    gap: 0.375rem;
+                    gap: 0.5rem;
                 }
                 
                 .song-item {
                     display: flex;
                     align-items: center;
-                    gap: 0.625rem;
-                    padding: 0.5rem;
+                    gap: 0.75rem;
+                    padding: 0.625rem;
                     background: var(--background-color);
                     border: 1px solid var(--border-color);
-                    border-radius: var(--radius-sm);
+                    border-radius: calc(var(--border-radius) / 2);
                     cursor: pointer;
-                    transition: var(--transition);
+                    transition: all 0.2s ease;
                 }
                 
                 .song-item:hover {
-                    background: var(--surface-light);
+                    background: var(--hover-color);
                     border-color: var(--primary-color);
                 }
                 
                 .song-item.active {
-                    background: var(--surface-light);
+                    background: var(--active-color);
                     border-color: var(--primary-color);
                 }
                 
                 .song-cover {
-                    width: 2.5rem;
-                    height: 2.5rem;
-                    border-radius: var(--radius-sm);
+                    width: 2.75rem;
+                    height: 2.75rem;
+                    border-radius: calc(var(--border-radius) / 3);
                     flex-shrink: 0;
                     overflow: hidden;
-                    background: var(--surface-light);
+                    background: var(--surface-color);
+                    border: 1px solid var(--border-color);
                 }
                 
                 .song-cover img {
@@ -365,7 +370,7 @@ class ModernMusicPlayer extends HTMLElement {
                 
                 .song-title {
                     font-weight: 500;
-                    font-size: 0.8125rem;
+                    font-size: 0.875rem;
                     color: var(--text-primary);
                     margin-bottom: 0.125rem;
                     white-space: nowrap;
@@ -374,27 +379,28 @@ class ModernMusicPlayer extends HTMLElement {
                 }
                 
                 .song-artist {
-                    font-size: 0.6875rem;
-                    color: var(--text-muted);
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
                 
                 .song-duration {
-                    font-size: 0.6875rem;
-                    color: var(--text-muted);
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
                     font-variant-numeric: tabular-nums;
                     flex-shrink: 0;
                 }
                 
-                /* Now Playing - MUCH MORE COMPACT */
+                /* Now Playing */
                 .now-playing {
                     flex: 1;
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
                     min-height: 0;
+                    background: var(--background-color);
                 }
                 
                 .now-playing-content {
@@ -403,41 +409,37 @@ class ModernMusicPlayer extends HTMLElement {
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
-                    padding: 1.5rem 1.25rem;
+                    padding: var(--spacing-lg);
                     overflow-y: auto;
                     min-height: 0;
                 }
                 
-                /* COMPACT COVER - reduced from 400px to 220px */
                 .current-cover-container {
                     width: 100%;
-                    max-width: 220px;
+                    max-width: 240px;
                     aspect-ratio: 1;
-                    margin-bottom: 1rem;
+                    margin-bottom: var(--spacing-lg);
                     position: relative;
                 }
                 
                 .current-cover {
                     width: 100%;
                     height: 100%;
-                    border-radius: var(--radius-lg);
+                    border-radius: var(--border-radius);
                     overflow: hidden;
                     background: var(--surface-color);
                     position: relative;
-                    border: 1px solid var(--border-color);
+                    border: 2px solid var(--border-color);
                 }
                 
-                .current-cover::before {
-                    content: '';
-                    position: absolute;
-                    inset: 0;
-                    background: var(--primary-color);
-                    opacity: 0;
-                    transition: var(--transition);
+                .current-cover.playing {
+                    border-color: var(--accent-color);
+                    animation: pulseGlow 2s ease-in-out infinite;
                 }
                 
-                .current-cover.playing::before {
-                    opacity: 0.15;
+                @keyframes pulseGlow {
+                    0%, 100% { border-color: var(--accent-color); }
+                    50% { border-color: var(--primary-color); }
                 }
                 
                 .current-cover img {
@@ -451,9 +453,8 @@ class ModernMusicPlayer extends HTMLElement {
                     bottom: 0;
                     left: 0;
                     right: 0;
-                    height: 50px;
-                    background: var(--background-color);
-                    opacity: 0.95;
+                    height: 60px;
+                    background: linear-gradient(to top, var(--background-color) 0%, transparent 100%);
                     display: flex;
                     align-items: flex-end;
                     padding: 0.5rem;
@@ -461,7 +462,7 @@ class ModernMusicPlayer extends HTMLElement {
                 
                 .mini-visualizer {
                     width: 100%;
-                    height: 30px;
+                    height: 40px;
                 }
                 
                 .current-info {
@@ -470,95 +471,96 @@ class ModernMusicPlayer extends HTMLElement {
                     max-width: 400px;
                 }
                 
-                /* COMPACT TEXT SIZES */
                 .current-title {
-                    font-size: 1.25rem;
+                    font-size: 1.375rem;
                     font-weight: 700;
                     color: var(--text-primary);
-                    margin-bottom: 0.375rem;
+                    margin-bottom: 0.5rem;
                     line-height: 1.3;
+                    font-family: var(--title-font);
                 }
                 
                 .current-artist {
-                    font-size: 0.9375rem;
+                    font-size: 1rem;
                     color: var(--text-secondary);
-                    margin-bottom: 0.25rem;
+                    margin-bottom: 0.375rem;
                 }
                 
                 .current-album {
-                    font-size: 0.8125rem;
-                    color: var(--text-muted);
-                    margin-bottom: 0.375rem;
+                    font-size: 0.875rem;
+                    color: var(--text-secondary);
+                    margin-bottom: 0.5rem;
                 }
                 
                 .current-genre {
                     display: inline-block;
-                    padding: 0.25rem 0.625rem;
-                    background: var(--surface-color);
-                    border: 1px solid var(--border-color);
+                    padding: 0.375rem 0.875rem;
+                    background: var(--accent-color);
                     border-radius: 999px;
                     font-size: 0.75rem;
-                    color: var(--text-secondary);
-                    margin-bottom: 1rem;
+                    color: white;
+                    font-weight: 600;
+                    margin-bottom: var(--spacing-md);
                 }
                 
-                /* Links Section - COMPACT */
+                /* Links Section */
                 .current-links {
                     display: flex;
                     flex-wrap: wrap;
-                    gap: 0.5rem;
+                    gap: 0.625rem;
                     justify-content: center;
-                    margin-bottom: 1rem;
+                    margin-bottom: var(--spacing-md);
                 }
                 
                 .link-btn {
-                    padding: 0.5rem 0.875rem;
+                    padding: 0.5rem 1rem;
                     background: var(--surface-color);
                     border: 1px solid var(--border-color);
-                    border-radius: var(--radius-md);
-                    color: var(--text-secondary);
-                    font-size: 0.75rem;
+                    border-radius: calc(var(--border-radius) / 2);
+                    color: var(--text-primary);
+                    font-size: 0.8125rem;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: var(--transition);
+                    transition: all 0.2s ease;
                     display: flex;
                     align-items: center;
-                    gap: 0.375rem;
+                    gap: 0.5rem;
                     text-decoration: none;
                 }
                 
                 .link-btn:hover {
-                    background: var(--surface-light);
+                    background: var(--primary-color);
                     border-color: var(--primary-color);
-                    color: var(--text-primary);
+                    color: white;
                 }
                 
                 .link-btn svg {
-                    width: 0.875rem;
-                    height: 0.875rem;
+                    width: 1rem;
+                    height: 1rem;
                     fill: currentColor;
                 }
                 
-                /* Controls Footer - COMPACT */
+                /* Controls Footer */
                 .controls-footer {
                     background: var(--surface-color);
-                    border-top: 1px solid var(--border-color);
-                    padding: 1rem 1.25rem;
+                    border-top: 2px solid var(--border-color);
+                    padding: var(--spacing-md) var(--spacing-lg);
                     flex-shrink: 0;
                 }
                 
                 .progress-section {
-                    margin-bottom: 1rem;
+                    margin-bottom: var(--spacing-md);
                 }
                 
                 .progress-bar-container {
                     position: relative;
-                    height: 4px;
-                    background: var(--surface-light);
-                    border-radius: 2px;
+                    height: 6px;
+                    background: var(--background-color);
+                    border-radius: 3px;
                     cursor: pointer;
-                    margin-bottom: 0.375rem;
+                    margin-bottom: 0.5rem;
                     border: 1px solid var(--border-color);
+                    overflow: hidden;
                 }
                 
                 .progress-bar-fill {
@@ -566,8 +568,8 @@ class ModernMusicPlayer extends HTMLElement {
                     top: 0;
                     left: 0;
                     height: 100%;
-                    background: var(--primary-color);
-                    border-radius: 2px;
+                    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+                    border-radius: 3px;
                     transition: width 0.1s linear;
                 }
                 
@@ -575,13 +577,13 @@ class ModernMusicPlayer extends HTMLElement {
                     position: absolute;
                     top: 50%;
                     transform: translate(-50%, -50%);
-                    width: 12px;
-                    height: 12px;
+                    width: 14px;
+                    height: 14px;
                     background: white;
-                    border: 2px solid var(--primary-color);
+                    border: 2px solid var(--accent-color);
                     border-radius: 50%;
                     opacity: 0;
-                    transition: var(--transition);
+                    transition: opacity 0.2s ease;
                 }
                 
                 .progress-bar-container:hover .progress-handle {
@@ -591,8 +593,8 @@ class ModernMusicPlayer extends HTMLElement {
                 .time-display {
                     display: flex;
                     justify-content: space-between;
-                    font-size: 0.6875rem;
-                    color: var(--text-muted);
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
                     font-variant-numeric: tabular-nums;
                 }
                 
@@ -600,7 +602,7 @@ class ModernMusicPlayer extends HTMLElement {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    gap: 1.5rem;
+                    gap: var(--spacing-lg);
                 }
                 
                 .controls-left,
@@ -613,67 +615,72 @@ class ModernMusicPlayer extends HTMLElement {
                 .controls-center {
                     display: flex;
                     align-items: center;
-                    gap: 0.75rem;
+                    gap: var(--spacing-md);
                 }
                 
                 .control-btn {
-                    width: 2rem;
-                    height: 2rem;
+                    width: 2.25rem;
+                    height: 2.25rem;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: transparent;
-                    border: none;
-                    color: var(--text-secondary);
+                    background: var(--background-color);
+                    border: 1px solid var(--border-color);
+                    color: var(--text-primary);
                     cursor: pointer;
-                    transition: var(--transition);
-                    border-radius: var(--radius-sm);
+                    transition: all 0.2s ease;
+                    border-radius: calc(var(--border-radius) / 2);
                 }
                 
                 .control-btn:hover {
-                    color: var(--text-primary);
-                    background: var(--surface-light);
+                    background: var(--primary-color);
+                    border-color: var(--primary-color);
+                    color: white;
                 }
                 
                 .control-btn.active {
-                    color: var(--primary-color);
+                    background: var(--accent-color);
+                    border-color: var(--accent-color);
+                    color: white;
                 }
                 
                 .control-btn svg {
-                    width: 1rem;
-                    height: 1rem;
+                    width: 1.125rem;
+                    height: 1.125rem;
                     fill: currentColor;
                 }
                 
                 .play-btn {
-                    width: 2.75rem;
-                    height: 2.75rem;
-                    background: var(--primary-color);
+                    width: 3rem;
+                    height: 3rem;
+                    background: var(--accent-color);
+                    border-color: var(--accent-color);
                     color: white;
-                    border: 1px solid var(--secondary-color);
                 }
                 
                 .play-btn:hover {
-                    background: var(--secondary-color);
+                    background: var(--primary-color);
+                    border-color: var(--primary-color);
+                    transform: scale(1.05);
                 }
                 
                 .play-btn svg {
-                    width: 1.25rem;
-                    height: 1.25rem;
+                    width: 1.375rem;
+                    height: 1.375rem;
                 }
                 
                 .volume-control {
                     display: flex;
                     align-items: center;
-                    gap: 0.5rem;
-                    min-width: 100px;
+                    gap: 0.625rem;
+                    min-width: 120px;
                 }
                 
                 .volume-slider {
                     flex: 1;
                     -webkit-appearance: none;
-                    height: 3px;
-                    background: var(--surface-light);
+                    height: 4px;
+                    background: var(--background-color);
                     border-radius: 2px;
                     outline: none;
                     cursor: pointer;
@@ -682,76 +689,78 @@ class ModernMusicPlayer extends HTMLElement {
                 
                 .volume-slider::-webkit-slider-thumb {
                     -webkit-appearance: none;
-                    width: 10px;
-                    height: 10px;
-                    background: var(--primary-color);
+                    width: 12px;
+                    height: 12px;
+                    background: var(--accent-color);
                     border-radius: 50%;
                     cursor: pointer;
-                    transition: var(--transition);
+                    transition: all 0.2s ease;
                 }
                 
                 .volume-slider::-webkit-slider-thumb:hover {
                     transform: scale(1.2);
+                    background: var(--primary-color);
                 }
                 
                 .volume-slider::-moz-range-thumb {
-                    width: 10px;
-                    height: 10px;
-                    background: var(--primary-color);
+                    width: 12px;
+                    height: 12px;
+                    background: var(--accent-color);
                     border: none;
                     border-radius: 50%;
                     cursor: pointer;
-                    transition: var(--transition);
+                    transition: all 0.2s ease;
                 }
                 
                 /* Empty State */
                 .empty-state {
                     text-align: center;
-                    padding: 2rem 1.25rem;
-                    color: var(--text-muted);
+                    padding: 2rem 1.5rem;
+                    color: var(--text-secondary);
                 }
                 
                 .empty-state svg {
-                    width: 3rem;
-                    height: 3rem;
-                    fill: var(--text-muted);
-                    margin-bottom: 0.75rem;
+                    width: 3.5rem;
+                    height: 3.5rem;
+                    fill: var(--text-secondary);
+                    margin-bottom: var(--spacing-md);
                     opacity: 0.5;
                 }
                 
                 .empty-state h3 {
-                    font-size: 1rem;
+                    font-size: 1.125rem;
                     font-weight: 600;
-                    color: var(--text-secondary);
-                    margin-bottom: 0.375rem;
+                    color: var(--text-primary);
+                    margin-bottom: 0.5rem;
                 }
                 
                 .back-btn {
-                    margin-bottom: 0.75rem;
+                    margin-bottom: var(--spacing-md);
                     width: 100%;
-                    padding: 0.5rem 0.75rem;
+                    padding: 0.625rem var(--spacing-md);
                     background: var(--background-color);
                     border: 1px solid var(--border-color);
-                    border-radius: var(--radius-md);
-                    color: var(--text-secondary);
-                    font-size: 0.8125rem;
+                    border-radius: calc(var(--border-radius) / 2);
+                    color: var(--text-primary);
+                    font-size: 0.875rem;
                     font-weight: 500;
                     cursor: pointer;
-                    transition: var(--transition);
+                    transition: all 0.2s ease;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    gap: 0.375rem;
+                    gap: 0.5rem;
                 }
                 
                 .back-btn:hover {
-                    background: var(--surface-light);
-                    color: var(--text-primary);
+                    background: var(--primary-color);
+                    border-color: var(--primary-color);
+                    color: white;
                 }
                 
                 .back-btn svg {
-                    width: 0.875rem;
-                    height: 0.875rem;
+                    width: 1rem;
+                    height: 1rem;
                     fill: currentColor;
                     transform: rotate(180deg);
                 }
@@ -763,23 +772,23 @@ class ModernMusicPlayer extends HTMLElement {
                     
                     .browser-sidebar {
                         width: 100%;
-                        height: 240px;
-                        max-height: 240px;
+                        height: 260px;
+                        max-height: 260px;
                         flex-shrink: 0;
                         border-right: none;
-                        border-bottom: 1px solid var(--border-color);
+                        border-bottom: 2px solid var(--border-color);
                     }
 
                     .albums-grid {
                         display: flex;
                         flex-direction: row;
                         flex-wrap: nowrap;
-                        gap: 0.5rem;
+                        gap: 0.625rem;
                         overflow-x: auto;
                         overflow-y: hidden;
                         scroll-snap-type: x mandatory;
                         -webkit-overflow-scrolling: touch;
-                        padding-bottom: 0.375rem;
+                        padding-bottom: 0.5rem;
                         scrollbar-width: none;
                     }
 
@@ -788,18 +797,18 @@ class ModernMusicPlayer extends HTMLElement {
                     }
 
                     .album-card {
-                        flex: 0 0 110px;
-                        width: 110px;
+                        flex: 0 0 120px;
+                        width: 120px;
                         scroll-snap-align: start;
                     }
                     
                     .now-playing-content {
-                        padding: 1.25rem 1rem;
+                        padding: var(--spacing-md);
                     }
                     
                     .current-cover-container {
                         max-width: 200px;
-                        margin-bottom: 0.875rem;
+                        margin-bottom: var(--spacing-md);
                     }
                     
                     .current-title {
@@ -807,64 +816,45 @@ class ModernMusicPlayer extends HTMLElement {
                     }
                     
                     .current-artist {
-                        font-size: 0.875rem;
-                    }
-                    
-                    .controls-main {
-                        gap: 1rem;
-                    }
-                    
-                    .controls-footer {
-                        padding: 0.875rem 1rem;
+                        font-size: 0.9375rem;
                     }
                 }
                 
                 @media (max-width: 480px) {
                     .player-header {
-                        padding: 0.625rem 1rem;
+                        padding: 0.75rem var(--spacing-md);
                     }
                     
                     .player-title h1 {
-                        font-size: 1rem;
+                        font-size: 1.125rem;
                     }
                     
-                    .controls-left,
-                    .controls-right {
-                        gap: 0.375rem;
+                    .controls-main {
+                        gap: var(--spacing-md);
                     }
                     
                     .control-btn {
-                        width: 1.75rem;
-                        height: 1.75rem;
+                        width: 2rem;
+                        height: 2rem;
                     }
                     
                     .play-btn {
-                        width: 2.5rem;
-                        height: 2.5rem;
+                        width: 2.75rem;
+                        height: 2.75rem;
                     }
                     
                     .volume-control {
-                        min-width: 70px;
+                        min-width: 90px;
                     }
 
                     .browser-sidebar {
-                        height: 220px;
-                        max-height: 220px;
+                        height: 240px;
+                        max-height: 240px;
                     }
 
                     .album-card {
-                        flex: 0 0 100px;
-                        width: 100px;
-                    }
-                }
-                
-                @media (max-width: 1024px) and (min-width: 769px) {
-                    .browser-sidebar {
-                        width: 260px;
-                    }
-                    
-                    .albums-grid {
-                        grid-template-columns: 1fr;
+                        flex: 0 0 110px;
+                        width: 110px;
                     }
                 }
             </style>
@@ -991,7 +981,8 @@ class ModernMusicPlayer extends HTMLElement {
     
     static get observedAttributes() {
         return ['player-data', 'player-name', 'primary-color', 'secondary-color', 'background-color', 
-                'text-primary', 'text-secondary', 'accent-color', 'surface-color', 'title-font-family', 'text-font-family'];
+                'text-primary', 'text-secondary', 'accent-color', 'surface-color', 
+                'title-font-family', 'body-font-family', 'border-radius'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
@@ -1011,7 +1002,7 @@ class ModernMusicPlayer extends HTMLElement {
             if (titleElement) {
                 titleElement.textContent = newValue;
             }
-        } else if (name.includes('color') || name.includes('font')) {
+        } else if (name.includes('color') || name.includes('font') || name === 'border-radius') {
             this._updateStyles();
         }
     }
@@ -1063,6 +1054,8 @@ class ModernMusicPlayer extends HTMLElement {
             'text-primary':     '--text-primary',
             'text-secondary':   '--text-secondary',
             'accent-color':     '--accent-color',
+            'title-font-family': '--title-font',
+            'body-font-family':  '--body-font',
         };
 
         const container = this._shadow.querySelector('.player-container');
@@ -1073,6 +1066,14 @@ class ModernMusicPlayer extends HTMLElement {
                 this.style.setProperty(cssVar, val);
                 if (container) container.style.setProperty(cssVar, val);
             }
+        }
+        
+        // Handle border radius
+        const borderRadius = this.getAttribute('border-radius');
+        if (borderRadius) {
+            const radiusValue = `${borderRadius}px`;
+            this.style.setProperty('--border-radius', radiusValue);
+            if (container) container.style.setProperty('--border-radius', radiusValue);
         }
     }
     
@@ -1499,18 +1500,18 @@ class ModernMusicPlayer extends HTMLElement {
             
             ctx.clearRect(0, 0, width, height);
             
-            const barCount = 40;
+            const barCount = 50;
             const barWidth = width / barCount;
             
-            const primaryColor = getComputedStyle(this).getPropertyValue('--primary-color') || '#0066cc';
+            const accentColor = getComputedStyle(this).getPropertyValue('--accent-color') || '#cc0000';
             
             for (let i = 0; i < barCount; i++) {
                 const value = this._dataArray[Math.floor(i * this._dataArray.length / barCount)];
                 const percent = value / 255;
-                const barHeight = percent * height * 0.8;
+                const barHeight = percent * height * 0.85;
                 
-                ctx.fillStyle = primaryColor;
-                ctx.fillRect(i * barWidth, height - barHeight, barWidth * 0.8, barHeight);
+                ctx.fillStyle = accentColor;
+                ctx.fillRect(i * barWidth, height - barHeight, barWidth * 0.75, barHeight);
             }
         };
         
@@ -1647,4 +1648,4 @@ class ModernMusicPlayer extends HTMLElement {
     }
 }
 
-customElements.define('modern-music-player', ModernMusicPlayer);
+customElements.define('music-player-pro', MusicPlayerPro);
