@@ -117,7 +117,7 @@ class MusicPlayerPro extends HTMLElement {
                     padding: var(--spacing-md);
                     border-bottom: 1px solid var(--border-color);
                     flex-shrink: 0;
-                    background: white;
+                    background: var(--surface-color);
                 }
                 
                 .view-toggle {
