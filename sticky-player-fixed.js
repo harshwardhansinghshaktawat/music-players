@@ -61,6 +61,12 @@ class StickyMusicPlayer extends HTMLElement {
     }
 
     connectedCallback() {
+        // The custom element itself is invisible - the actual player is appended to body
+        this.style.display = 'block';
+        this.style.height = '0';
+        this.style.width = '0';
+        this.style.overflow = 'hidden';
+        
         this._injectStyles();
         this._buildDOM();
         this._initAudio();
@@ -72,6 +78,11 @@ class StickyMusicPlayer extends HTMLElement {
     disconnectedCallback() {
         if (this._animId) cancelAnimationFrame(this._animId);
         if (this._audio) this._audio.pause();
+        // Remove the fixed player from body
+        const player = document.getElementById('sticky-player-fixed');
+        if (player) player.remove();
+        // Remove body padding
+        document.body.style.paddingBottom = '';
     }
 
     _injectStyles() {
@@ -102,13 +113,18 @@ sticky-music-player {
 }
 
 .sticky-player {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
     width: 100%;
     background: var(--bg);
     padding: 16px 24px;
     display: flex;
     align-items: center;
     gap: 20px;
-    position: relative;
+    z-index: 9999;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* FIX: Added shadow with controllable color and intensity */
@@ -122,6 +138,7 @@ sticky-music-player {
     background: linear-gradient(to bottom, transparent, var(--shadow-color));
     opacity: var(--shadow-intensity);
     pointer-events: none;
+    z-index: -1;
 }
 
 /* Album Art - FIX: Removed animations */
@@ -417,7 +434,11 @@ sticky-music-player {
     }
 
     _buildDOM() {
+        // Check if player already exists
+        if (document.getElementById('sticky-player-fixed')) return;
+        
         const player = document.createElement('div');
+        player.id = 'sticky-player-fixed';
         player.className = 'sticky-player';
         player.innerHTML = `
             <div class="album-art" id="albumArt">
@@ -482,7 +503,12 @@ sticky-music-player {
                 <div class="vis-bar"></div>
             </div>
         `;
-        this.appendChild(player);
+        
+        // Append to body with fixed positioning
+        document.body.appendChild(player);
+        
+        // Add padding to body so content doesn't go under the player
+        document.body.style.paddingBottom = '90px';
     }
 
     _initAudio() {
