@@ -709,6 +709,9 @@ class TrapNationVisualizer extends HTMLElement {
     _clearBeatState() {
         this._kickTimestamps=[]; this._nextKickIdx=0; this._detectedBPM=0; this._micMode=false;
         this._kickStrength=0; this._bgPulse=0; this._kickEnv=0; this._bgEnv=0;
+        // Also zero the ring smooth buffer so no ghost spectrum carries over
+        this._ringSmooth.fill(0);
+        this._ringBuf.fill(0);
     }
 
     _resetRTBeat() {
@@ -1014,19 +1017,85 @@ class TrapNationVisualizer extends HTMLElement {
         ctx.restore();
     }
 
-    // ── MAIN LOOP — exact same frame order as original HTML ──
+    // ── MAIN LOOP ────────────────────────────────────────────
+    //
+    //  Beat/envelope logic is gated on _isPlaying so that:
+    //  • Paused / no song    → kick env decays to zero and stops,
+    //                          analyser is not read, RT detector silent
+    //  • Tab hidden→visible  → anchor is re-synced so the lookahead
+    //                          doesn't fire a burst of stale kicks
+    //
+    //  _tabWasHidden tracks whether the page was hidden since the
+    //  last frame. On return we re-anchor _playbackAnchorAC to the
+    //  current Web Audio clock and skip past any kicks that would
+    //  have fired while we were away, rather than firing them all
+    //  at once.
 
     _startLoop() {
+        // Track tab visibility so we can re-anchor on return
+        this._tabWasHidden = false;
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this._tabWasHidden = true;
+            } else if (this._tabWasHidden) {
+                this._tabWasHidden = false;
+                if (this._isPlaying && this._aC) {
+                    // Re-anchor the Web Audio clock to now, and fast-forward
+                    // the kick index past any timestamps we missed while hidden
+                    const missed = this._playbackAnchorSong +
+                                   (this._aC.currentTime - this._playbackAnchorAC);
+                    this._playbackAnchorAC   = this._aC.currentTime;
+                    this._playbackAnchorSong = this._audioEl.currentTime;
+                    // Skip kicks that fell while tab was hidden
+                    while (this._nextKickIdx < this._kickTimestamps.length &&
+                           this._kickTimestamps[this._nextKickIdx] < this._playbackAnchorSong) {
+                        this._nextKickIdx++;
+                    }
+                }
+                // Flush stale ring data so no ghost spectrum appears
+                this._ringSmooth.fill(0);
+                this._ringBuf.fill(0);
+            }
+        });
+
         const frame = () => {
             this._animId = requestAnimationFrame(frame);
             const sr = this._aC ? this._aC.sampleRate : 44100;
-            if (this._live && this._vizAnalyser) {
+
+            if (this._live && this._isPlaying && this._vizAnalyser) {
+                // Only read analyser and fire beat detection when actually playing
                 this._vizAnalyser.getByteFrequencyData(this._vizData);
                 this._buildRingArray(sr);
                 if (!this._micMode && this._kickTimestamps.length > 0) this._tickLookahead();
                 else this._tickRTBeat();
+
+                // Decay envelope each frame while playing
+                this._decayKick();
+            } else {
+                // Not playing: drain kick envelope to zero quickly so any
+                // residual flash/thump from before pause fades out cleanly,
+                // then hold at exactly zero — no further decay needed
+                if (this._kickEnv > 0.001 || this._bgEnv > 0.001) {
+                    this._kickEnv *= 0.70;  // fast drain (not the slow beat decay)
+                    this._bgEnv   *= 0.70;
+                    this._kickStrength = this._kickEnv * this._kickEnv;
+                    this._bgPulse      = this._bgEnv   * this._bgEnv;
+                } else {
+                    // Hard-clamp to zero so floating point never triggers flash
+                    this._kickEnv = 0; this._bgEnv = 0;
+                    this._kickStrength = 0; this._bgPulse = 0;
+                }
+
+                // Drain ring spectrum smoothly to zero so it doesn't freeze
+                // at its last position when song pauses
+                if (this._live) {
+                    for (let i = 0; i < this._N_RING; i++) {
+                        this._ringSmooth[i] *= 0.88;
+                        if (this._ringSmooth[i] < 0.001) this._ringSmooth[i] = 0;
+                    }
+                }
             }
-            this._decayKick();
+
             this._updateKenBurns();
             this._drawBG();
             this._ctx.clearRect(0,0,this._W,this._H);
@@ -1185,12 +1254,31 @@ class TrapNationVisualizer extends HTMLElement {
 
     _onPlay()  {
         this._isPlaying=true;
+        // Re-anchor Web Audio clock at the exact moment playback resumes.
+        // This fixes the lookahead drifting after pause/resume cycles.
+        if (this._aC) {
+            this._playbackAnchorAC   = this._aC.currentTime;
+            this._playbackAnchorSong = this._audioEl.currentTime;
+            // Skip past any kick timestamps behind current position
+            // (covers the case where user seeks while paused)
+            while (this._nextKickIdx < this._kickTimestamps.length &&
+                   this._kickTimestamps[this._nextKickIdx] < this._playbackAnchorSong - 0.05) {
+                this._nextKickIdx++;
+            }
+        }
+        // Reset RT detector so it doesn't treat silence-to-music jump as a kick
+        this._resetRTBeat();
         const pi=this.querySelector('#tnvPlayIcon'),pa=this.querySelector('#tnvPauseIcon');
         if (pi) pi.style.display='none'; if (pa) pa.style.display='block';
     }
 
     _onPause() {
         this._isPlaying=false;
+        // Zero beat state immediately — loop will drain smoothly
+        // but zeroing here ensures the very next frame shows nothing
+        this._kickEnv=0; this._bgEnv=0; this._kickStrength=0; this._bgPulse=0;
+        // Reset RT beat warmup so it re-learns average on resume
+        this._resetRTBeat();
         const pi=this.querySelector('#tnvPlayIcon'),pa=this.querySelector('#tnvPauseIcon');
         if (pi) pi.style.display='block'; if (pa) pa.style.display='none';
     }
