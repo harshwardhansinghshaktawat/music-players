@@ -86,6 +86,22 @@ class TrapNationVisualizer extends HTMLElement {
 
         // ── Default scheme (used by canvas before first attr) ──
         this._S = { c1:'#00ffff', c2:'#9b59b6', c3:'#ffffff', glow:'#00ffff', bgTint:'#001122' };
+
+        // ── New panel-controlled settings ──────────────────────
+        this._circleScale = 1.0;    // 0.5–1.5, multiplies BASE_R + CENTER_R
+        this._bgMode      = 'random'; // 'random' | 'cover'
+        this._rtSens      = 1.35;   // RT beat sensitivity (replaces hardcoded 1.35)
+        this._centerLine1 = 'TRAP';   // top label in centre disc
+        this._centerLine2 = 'NATION'; // bottom label in centre disc
+
+        // ── Precision timing anchor for lookahead ──────────────
+        // audioEl.currentTime has ~100ms jitter at OS level.
+        // We instead track aC.currentTime at the moment of play
+        // start and compute song position as:
+        //   songPos = _playbackAnchorSong + (aC.currentTime - _playbackAnchorAC)
+        // This gives sub-millisecond accuracy regardless of OS tick rate.
+        this._playbackAnchorAC   = 0; // aC.currentTime snapshot at play start
+        this._playbackAnchorSong = 0; // song position at that snapshot
     }
 
     // ──────────────────────────────────────────────────────────
@@ -103,7 +119,12 @@ class TrapNationVisualizer extends HTMLElement {
             'bg-tint-color',    // background pulse tint
             'particle-size',
             'particle-speed',
-            'font-family'
+            'font-family',
+            'circle-scale',     // 0.5–1.5 — ring + disc size multiplier
+            'bg-mode',          // 'random' | 'cover'
+            'beat-threshold',   // RT sensitivity, default 1.35
+            'center-line1',     // top text in centre disc (default 'TRAP')
+            'center-line2'      // bottom text in centre disc (default 'NATION')
         ];
     }
 
@@ -135,6 +156,35 @@ class TrapNationVisualizer extends HTMLElement {
         if (name === 'particle-speed') {
             this._particleSpeed = parseFloat(newVal) || 1.0;
             this._rebuildParticles();
+            return;
+        }
+
+        if (name === 'circle-scale') {
+            this._circleScale = parseFloat(newVal) || 1.0;
+            this._resize(); // recalculate BASE_R / CENTER_R with new multiplier
+            return;
+        }
+
+        if (name === 'bg-mode') {
+            this._bgMode = newVal || 'random';
+            // Load cover as BG if switching to cover mode and a song is loaded
+            if (this._bgMode === 'cover') this._loadBGAsCover();
+            else                          this._loadBGRandom();
+            return;
+        }
+
+        if (name === 'beat-threshold') {
+            this._rtSens = parseFloat(newVal) || 1.35;
+            return;
+        }
+
+        if (name === 'center-line1') {
+            this._centerLine1 = newVal || 'TRAP';
+            return;
+        }
+
+        if (name === 'center-line2') {
+            this._centerLine2 = newVal || 'NATION';
             return;
         }
 
@@ -451,9 +501,10 @@ class TrapNationVisualizer extends HTMLElement {
         this._H  = this.offsetHeight || 600;
         this._CX = this._W / 2;
         this._CY = this._H / 2;
-        this._BASE_R   = Math.min(this._W, this._H) * 0.240;
-        this._MAX_H    = Math.min(this._W, this._H) * 0.100;
-        this._CENTER_R = this._BASE_R * 0.79;
+        const baseScale = Math.min(this._W, this._H) * 0.240 * (this._circleScale || 1.0);
+        this._BASE_R   = baseScale;
+        this._MAX_H    = Math.min(this._W, this._H) * 0.100 * (this._circleScale || 1.0);
+        this._CENTER_R = baseScale * 0.79;
         [this._bgC, this._mc, this._off1, this._off2].forEach(c => {
             c.width = this._W; c.height = this._H;
         });
@@ -463,11 +514,32 @@ class TrapNationVisualizer extends HTMLElement {
         this._mc.style.height  = this._H + 'px';
     }
 
-    _loadBGImage() {
+    _loadBGRandom() {
+        // Loads a random picsum photo as the Ken Burns background
         this._bgImg = new Image();
         this._bgImg.crossOrigin = 'anonymous';
-        this._bgImg.src = 'https://picsum.photos/1920/1080?random=72';
+        const seed = Math.floor(Math.random() * 200) + 1;
+        this._bgImg.src = `https://picsum.photos/1920/1080?random=${seed}`;
         this._bgImg.onload = () => { this._bgReady = true; };
+    }
+
+    _loadBGAsCover() {
+        // Uses the current song's cover art as the Ken Burns background
+        const song = this._songs[this._currentSong];
+        if (song && song.coverImage) {
+            this._bgImg = new Image();
+            this._bgImg.crossOrigin = 'anonymous';
+            this._bgImg.src = song.coverImage;
+            this._bgImg.onload = () => { this._bgReady = true; };
+            this._bgReady = false;
+        }
+        // If no cover art, keep current bg image unchanged
+    }
+
+    _loadBGImage() {
+        // Called once on connectedCallback — respects current bgMode
+        if (this._bgMode === 'cover') this._loadBGAsCover();
+        else                          this._loadBGRandom();
     }
 
     _updateCover(song) {
@@ -477,6 +549,8 @@ class TrapNationVisualizer extends HTMLElement {
             this._coverImg.src = song.coverImage;
             this._coverImg.onload = () => { this._coverReady = true; };
             this._coverReady = false;
+            // Also update BG if in cover mode
+            if (this._bgMode === 'cover') this._loadBGAsCover();
         } else {
             this._coverImg = null; this._coverReady = false;
         }
@@ -611,8 +685,15 @@ class TrapNationVisualizer extends HTMLElement {
         for (let i = 0; i < raw.length; i++) if (Math.abs(raw[i]) > peak) peak = Math.abs(raw[i]);
         const norm = new Float32Array(raw.length);
         if (peak > 0) for (let i = 0; i < raw.length; i++) norm[i] = raw[i] / peak;
+        // Starting threshold scales with rtSens: lower sensitivity = start lower
+        // rtSens 1.35 (default) → start at 0.75
+        // rtSens 1.0 (very sensitive) → start at 0.45
+        // rtSens 2.0 (high threshold) → start at 0.85 (clamped)
+        const startThr = Math.min(0.85, Math.max(0.30, 0.75 - (1.35 - this._rtSens) * 0.30));
+        const thrSteps = [];
+        for (let t = startThr; t >= 0.30; t = Math.round((t - 0.05) * 100) / 100) thrSteps.push(t);
         let peaks = [];
-        for (const thr of [0.75, 0.70, 0.65, 0.60, 0.55, 0.50, 0.45]) {
+        for (const thr of thrSteps) {
             peaks = this._getPeaksAtThreshold(norm, thr, sr);
             if (peaks.length >= 20) break;
         }
@@ -635,19 +716,53 @@ class TrapNationVisualizer extends HTMLElement {
         this._kickStrength=0; this._bgPulse=0; this._kickEnv=0; this._bgEnv=0;
     }
 
-    // ── LOOKAHEAD SCHEDULER — exact same as original HTML (uses audioEl.currentTime) ──
+    // ── LOOKAHEAD SCHEDULER ──────────────────────────────────
+    //
+    //  Root cause of kick lag: audioEl.currentTime is updated by
+    //  the OS audio thread on a ~10–100ms tick, so it can lag the
+    //  actual playback position by up to one OS buffer length.
+    //
+    //  Fix: Record aC.currentTime (Web Audio clock, sub-ms precision)
+    //  at the exact moment playback starts (_playbackAnchorAC).
+    //  Each frame, derive precise song position as:
+    //    songPos = _playbackAnchorSong + (aC.currentTime - _playbackAnchorAC)
+    //
+    //  This is the same clock used by the Web Audio scheduler itself,
+    //  so kick timestamps from offline analysis align perfectly.
+    //  Lookahead window: 1.5 frames (25ms) to ensure kicks fire before
+    //  the RAF that renders the frame where the kick actually hits.
 
     _tickLookahead() {
         if (!this._live || this._micMode || !this._kickTimestamps.length) return;
-        const songTime = this._audioEl.currentTime;
-        const horizon  = songTime + 0.020;
+        if (!this._aC) return;
+
+        // Precise song position via Web Audio clock
+        const songTime = this._playbackAnchorSong +
+                         (this._aC.currentTime - this._playbackAnchorAC);
+
+        // 25ms lookahead = ~1.5 frames at 60fps
+        const horizon = songTime + 0.025;
+
+        // Skip past any kicks we've already fired or are too far behind
         while (this._nextKickIdx < this._kickTimestamps.length &&
-               this._kickTimestamps[this._nextKickIdx] < songTime - 0.04) this._nextKickIdx++;
+               this._kickTimestamps[this._nextKickIdx] < songTime - 0.05) {
+            this._nextKickIdx++;
+        }
+
+        // Fire all kicks inside the lookahead window
         while (this._nextKickIdx < this._kickTimestamps.length &&
                this._kickTimestamps[this._nextKickIdx] <= horizon) {
-            this._fireKick(1.0); this._nextKickIdx++;
+            this._fireKick(1.0);
+            this._nextKickIdx++;
         }
-        if (this._songDuration > 0 && songTime >= this._songDuration - 0.08) this._nextKickIdx = 0;
+
+        // Loop reset: when song position wraps back to 0, reset kick pointer
+        if (this._songDuration > 0 && songTime >= this._songDuration - 0.08) {
+            this._nextKickIdx = 0;
+            // Re-anchor the clock for the loop
+            this._playbackAnchorAC   = this._aC.currentTime;
+            this._playbackAnchorSong = 0;
+        }
     }
 
     // ── REAL-TIME BEAT DETECTION — exact same as original HTML ──
@@ -674,7 +789,7 @@ class TrapNationVisualizer extends HTMLElement {
         for (let i = 0; i < len; i++) avg += this._rtHistory[i];
         avg /= len;
         if (this._rtCooldown > 0) { this._rtCooldown--; return; }
-        if (rms > avg * 1.35 && rms > 0.06) {
+        if (rms > avg * this._rtSens && rms > 0.06) {
             const mag = Math.min(1.0, (rms - avg) / Math.max(0.01, avg * 0.5));
             this._fireKick(0.55 + mag * 0.45);
             this._rtCooldown = 22;
@@ -878,10 +993,10 @@ class TrapNationVisualizer extends HTMLElement {
         const glowSize=10+this._kickStrength*38,glowAlpha=0.86+this._kickStrength*0.14;
         ctx.shadowBlur=glowSize;ctx.shadowColor=S.glow;ctx.globalAlpha=glowAlpha;
         ctx.fillStyle=this._kickStrength>0.15?this._lerpColor(S.c1,'#ffffff',this._kickStrength*0.55):S.c1;
-        ctx.fillText('TRAP',CX,CY-fs*0.60);
+        ctx.fillText(this._centerLine1||'TRAP',CX,CY-fs*0.60);
         ctx.shadowBlur=glowSize*0.85;ctx.shadowColor=S.glow;
         ctx.fillStyle=this._kickStrength>0.15?this._lerpColor(S.c2,'#ffffff',this._kickStrength*0.40):S.c2;
-        ctx.fillText('NATION',CX,CY+fs*0.60);
+        ctx.fillText(this._centerLine2||'NATION',CX,CY+fs*0.60);
         ctx.restore();
     }
 
@@ -961,10 +1076,17 @@ class TrapNationVisualizer extends HTMLElement {
             this._srcConnected = true;
         }
 
-        this._nextKickIdx = 0;
-        this._live = true;
+        this._nextKickIdx        = 0;
+        this._playbackAnchorSong = 0;
+        this._live               = true;
 
-        if (autoPlay) this._audioEl.play().catch(e => console.warn('[TrapNation] Autoplay blocked:', e));
+        if (autoPlay) {
+            this._audioEl.play().then(() => {
+                // Anchor the Web Audio clock to song position 0 at play start
+                this._playbackAnchorAC   = this._aC.currentTime;
+                this._playbackAnchorSong = this._audioEl.currentTime;
+            }).catch(e => console.warn('[TrapNation] Autoplay blocked:', e));
+        }
     }
 
     _updateSongInfoUI(song) {
@@ -976,9 +1098,23 @@ class TrapNationVisualizer extends HTMLElement {
     _togglePlay() {
         if (!this._audioEl||!this._songs.length) return;
         this._initAudio();
-        if (this._aC.state==='suspended') this._aC.resume();
-        if (this._audioEl.paused) this._audioEl.play().catch(e=>console.warn(e));
-        else this._audioEl.pause();
+        if (this._aC.state==='suspended') {
+            this._aC.resume().then(() => this._doTogglePlay());
+        } else {
+            this._doTogglePlay();
+        }
+    }
+
+    _doTogglePlay() {
+        if (this._audioEl.paused) {
+            this._audioEl.play().then(() => {
+                // Re-anchor clock each time playback resumes
+                this._playbackAnchorAC   = this._aC.currentTime;
+                this._playbackAnchorSong = this._audioEl.currentTime;
+            }).catch(e => console.warn(e));
+        } else {
+            this._audioEl.pause();
+        }
     }
 
     _prev() {
@@ -1125,7 +1261,16 @@ class TrapNationVisualizer extends HTMLElement {
         this.querySelector('#tnvProgressBar').addEventListener('click',e=>{
             const rect=this.querySelector('#tnvProgressBar').getBoundingClientRect();
             const pct=(e.clientX-rect.left)/rect.width;
-            if (this._audioEl&&this._audioEl.duration){this._audioEl.currentTime=pct*this._audioEl.duration;this._nextKickIdx=0;}
+            if (this._audioEl&&this._audioEl.duration){
+                const seekPos = pct * this._audioEl.duration;
+                this._audioEl.currentTime = seekPos;
+                this._nextKickIdx = 0;
+                // Re-anchor the Web Audio clock after seek
+                if (this._aC) {
+                    this._playbackAnchorAC   = this._aC.currentTime;
+                    this._playbackAnchorSong = seekPos;
+                }
+            }
         });
         document.addEventListener('click',e=>{
             const drawer=this.querySelector('#tnvDrawer'),qBtn=this.querySelector('#tnvQueueBtn');
